@@ -49,9 +49,11 @@ services:
       - mcm-b
       - als
     ports:
-      - "4000:4000"
-      - "4001:4001"
-      - "4040:5040"
+      # Hôte : IN/OUT/MET (défaut 4000/4001/4040). Conteneur : 4000/4001/5040.
+      # Sur sdk-node, cmcalavi occupe déjà 4000/4001 → IN=11000 OUT=11001 MET=11040
+      - "${IN:-4000}:4000"
+      - "${OUT:-4001}:4001"
+      - "${MET:-4040}:5040"
     environment:
       LOG_LEVEL: info
       PM4ML_ENABLED: "true"
