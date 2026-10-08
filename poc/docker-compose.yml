@@ -1,0 +1,79 @@
+# Two DFSPs, one SDK process, two mock mcm-agents.
+# From contrib/sdk-scheme-adapter-multi-tenant: docker compose -f poc/docker-compose.yml up --build
+services:
+  redis:
+    image: redis:7-alpine
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      PORT: "3000"
+
+  als:
+    build:
+      context: .
+      dockerfile: Dockerfile.als
+    environment:
+      PORT: "4002"
+
+  mcm-a:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock-agent
+    environment:
+      DFSP_ID: dfsp-a
+      PORT: "4004"
+      BACKEND_ENDPOINT: backend:3000
+      PEER_ENDPOINT: als:4002
+
+  mcm-b:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock-agent
+    environment:
+      DFSP_ID: dfsp-b
+      PORT: "4004"
+      BACKEND_ENDPOINT: backend:3000
+      PEER_ENDPOINT: als:4002
+
+  sdk:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+      - backend
+      - mcm-a
+      - mcm-b
+      - als
+    ports:
+      - "4000:4000"
+      - "4001:4001"
+      - "4040:5040"
+    environment:
+      LOG_LEVEL: info
+      PM4ML_ENABLED: "true"
+      PM4ML_MULTI_TENANT: "true"
+      DFSP_HOST_SUFFIX: ".ext.openmfi.org"
+      MGMT_API_WS_URLS: "mcm-a:4004,mcm-b:4004"
+      CACHE_URL: redis://redis:6379
+      PEER_ENDPOINT: als:4002
+      ALS_ENDPOINT: als:4002
+      QUOTES_ENDPOINT: als:4002
+      TRANSFERS_ENDPOINT: als:4002
+      BACKEND_ENDPOINT: backend:3000
+      DFSP_ID: placeholder
+      INBOUND_LISTEN_PORT: "4000"
+      OUTBOUND_LISTEN_PORT: "4001"
+      METRICS_SERVER_LISTEN_PORT: "5040"
+      INBOUND_MUTUAL_TLS_ENABLED: "false"
+      OUTBOUND_MUTUAL_TLS_ENABLED: "false"
+      VALIDATE_INBOUND_JWS: "false"
+      JWS_SIGN: "false"
+      ENABLE_BACKEND_EVENT_HANDLER: "false"
+      ENABLE_FSPIOP_EVENT_HANDLER: "false"
+      AUTO_ACCEPT_PARTY: "true"
+      AUTO_ACCEPT_QUOTES: "true"
+      CHECK_ILP: "false"

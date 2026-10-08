@@ -1,0 +1,5 @@
+FROM node:20-alpine
+WORKDIR /app
+RUN npm install ws@8.18.1
+COPY mock-mcm-agent.js .
+CMD ["node", "mock-mcm-agent.js"]
