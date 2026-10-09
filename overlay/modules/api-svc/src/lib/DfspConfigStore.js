@@ -24,12 +24,38 @@ function stripLeadingScheme(value) {
     return value.replace(/^https?:\/\//i, '');
 }
 
+function toNodeCert(value) {
+    if (value == null) return value;
+    if (Buffer.isBuffer(value)) return value;
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+        if (value.length && typeof value[0] === 'number') {
+            return Buffer.from(value);
+        }
+        return value.map(toNodeCert);
+    }
+    if (typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
+        return Buffer.from(value.data);
+    }
+    // lodash.merge casse un Buffer en {0,1,2,...,length}
+    if (typeof value === 'object' && typeof value.length === 'number' && value.length > 20 && typeof value[0] === 'number') {
+        return Buffer.from(Uint8Array.from({ length: value.length }, (_, i) => value[i]));
+    }
+    return value;
+}
+
 function copyTls(tls) {
     if (!tls || typeof tls !== 'object') return tls;
+    const creds = tls.creds && {
+        ...tls.creds,
+        ca: toNodeCert(tls.creds.ca),
+        cert: toNodeCert(tls.creds.cert),
+        key: toNodeCert(tls.creds.key),
+    };
     return {
         ...tls,
         mutualTLS: tls.mutualTLS && { ...tls.mutualTLS },
-        creds: tls.creds && { ...tls.creds },
+        creds,
     };
 }
 
@@ -135,6 +161,13 @@ class DfspConfigStore {
         }
         if (mutualTLS) {
             next.mutualTLS = mutualTLS;
+        }
+        if (next.outbound && next.outbound.tls) {
+            next.tls = {
+                enabled: Boolean(next.outbound.tls.mutualTLS && next.outbound.tls.mutualTLS.enabled),
+                creds: next.outbound.tls.creds,
+            };
+        } else if (mutualTLS && mutualTLS.outboundRequests) {
             next.tls = mutualTLS.outboundRequests;
         }
         return next;

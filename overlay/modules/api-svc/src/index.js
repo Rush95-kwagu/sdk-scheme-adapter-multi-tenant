@@ -230,10 +230,13 @@ class Server extends EventEmitter {
                 const slice = dfspConfigStore.pickTenantSlice(newConf);
                 slice.dfspId = newConf.dfspId || endpoint.dfspId;
                 const saved = dfspConfigStore.upsert(slice);
+                const cert = saved && saved.outboundTls && saved.outboundTls.creds && saved.outboundTls.creds.cert;
                 this.logger.info('PM4ML tenant config upserted', {
                     dfspId: saved && saved.dfspId,
                     tenants: dfspConfigStore.list(),
-                    hasOutboundClientCert: Boolean(saved && saved.outboundTls && saved.outboundTls.creds && saved.outboundTls.creds.cert),
+                    hasOutboundClientCert: Boolean(cert),
+                    certKind: cert == null ? null : (Buffer.isBuffer(cert) ? 'buffer' : typeof cert),
+                    certBytes: Buffer.isBuffer(cert) ? cert.length : (typeof cert === 'string' ? cert.length : null),
                 });
             } catch (err) {
                 this.logger.push({ err, endpoint: key }).error('tenant upsert failed');
@@ -277,15 +280,25 @@ class Server extends EventEmitter {
                     mgmtAPIWsPort: endpoint.port,
                 },
             }, logger, client);
-            const fromAgent = updated && updated.dfspId ? updated : {};
+            const fromAgent = updated || {};
             const merged = _.merge(JSON.parse(JSON.stringify(this.conf)), updated || {});
-            const slice = dfspConfigStore.pickTenantSlice({ ...merged, ...fromAgent });
+            const slice = dfspConfigStore.pickTenantSlice({
+                ...merged,
+                ...fromAgent,
+                outbound: fromAgent.outbound || merged.outbound,
+                inbound: fromAgent.inbound || merged.inbound,
+                mutualTLS: fromAgent.mutualTLS || merged.mutualTLS,
+                jwsSigningKey: fromAgent.jwsSigningKey || merged.jwsSigningKey,
+            });
             slice.dfspId = fromAgent.dfspId || endpoint.dfspId || merged.dfspId;
             dfspConfigStore.upsert(slice);
+            const cert = slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.cert;
             this.logger.info('PM4ML tenant config loaded from CONFIGURATION.READ', {
                 dfspId: slice.dfspId,
                 tenants: dfspConfigStore.list(),
-                hasOutboundClientCert: Boolean(slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.cert),
+                hasOutboundClientCert: Boolean(cert),
+                certKind: cert == null ? null : (Buffer.isBuffer(cert) ? 'buffer' : typeof cert),
+                certBytes: Buffer.isBuffer(cert) ? cert.length : (typeof cert === 'string' ? cert.length : null),
             });
         } catch (err) {
             logger.push({ err }).warn('initial CONFIGURATION.READ failed; waiting for NOTIFY');
