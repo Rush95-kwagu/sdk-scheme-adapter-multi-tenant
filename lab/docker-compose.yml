@@ -1,12 +1,11 @@
-# Overlay SDK branché sur un vrai mcm-agent (pas les mocks poc/).
-# Premier DFSP : cmcalavi. Vault + agent + redis cmcalavi restent intacts.
+# Overlay SDK + vrais mcm-agents (pas poc/).
+# Vault / agent / redis de chaque DFSP restent. SDK dédié stoppé.
 #
 #   export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
-#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')
+#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
+#   export GTO_DOCKER_NET=$(docker inspect mcm-agent-gto \
+#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
 #   docker compose -f lab/docker-compose.yml up --build -d
-#
-# Ports hôte 11000/11001/11040 : le POC doit être down, cmcalavi dédié stoppé
-# (sinon deux SDK sur le même websocket agent).
 
 name: sdk-mt
 
@@ -35,7 +34,7 @@ services:
       PM4ML_MULTI_TENANT: "true"
       DFSP_HOST_SUFFIX: ".ext.openmfi.org"
       # L'agent réel n'envoie pas toujours dfspId dans NOTIFY — l'ancre est le préfixe avant @.
-      MGMT_API_WS_URLS: "cmcalavi@mcm-agent-cmcalavi:4004"
+      MGMT_API_WS_URLS: "cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004"
       DFSP_ID: placeholder
       CACHE_URL: redis://redis:6379
       PEER_ENDPOINT: extapi.openmfi.org
@@ -64,9 +63,13 @@ services:
     networks:
       - sdk-mt
       - cmcalavi
+      - gto
 
 networks:
   sdk-mt:
   cmcalavi:
     external: true
     name: ${CMCALAVI_DOCKER_NET:?set CMCALAVI_DOCKER_NET to mcm-agent-cmcalavi network}
+  gto:
+    external: true
+    name: ${GTO_DOCKER_NET:?set GTO_DOCKER_NET to mcm-agent-gto network}
