@@ -1,0 +1,71 @@
+# Overlay SDK branché sur un vrai mcm-agent (pas les mocks poc/).
+# Premier DFSP : cmcalavi. Vault + agent + redis cmcalavi restent intacts.
+#
+#   export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
+#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')
+#   docker compose -f lab/docker-compose.yml up --build -d
+#
+# Ports hôte 11000/11001/11040 : le POC doit être down, cmcalavi dédié stoppé
+# (sinon deux SDK sur le même websocket agent).
+
+name: sdk-mt
+
+services:
+  redis:
+    image: redis:7-alpine
+    networks:
+      - sdk-mt
+
+  sdk:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+    ports:
+      - "${IN:-11000}:5000"
+      - "${OUT:-11001}:5001"
+      - "${MET:-11040}:5040"
+    extra_hosts:
+      - "extapi.openmfi.org:172.16.2.28"
+    environment:
+      LOG_LEVEL: info
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      PM4ML_ENABLED: "true"
+      PM4ML_MULTI_TENANT: "true"
+      DFSP_HOST_SUFFIX: ".ext.openmfi.org"
+      MGMT_API_WS_URLS: "mcm-agent-cmcalavi:4004"
+      DFSP_ID: placeholder
+      CACHE_URL: redis://redis:6379
+      PEER_ENDPOINT: extapi.openmfi.org
+      ALS_ENDPOINT: extapi.openmfi.org
+      QUOTES_ENDPOINT: extapi.openmfi.org
+      TRANSFERS_ENDPOINT: extapi.openmfi.org
+      TRANSACTION_REQUESTS_ENDPOINT: extapi.openmfi.org
+      BULK_QUOTES_ENDPOINT: extapi.openmfi.org
+      BULK_TRANSFERS_ENDPOINT: extapi.openmfi.org
+      BACKEND_ENDPOINT: 127.0.0.1:9
+      INBOUND_LISTEN_PORT: "5000"
+      OUTBOUND_LISTEN_PORT: "5001"
+      METRICS_SERVER_LISTEN_PORT: "5040"
+      INBOUND_MUTUAL_TLS_ENABLED: "false"
+      OUTBOUND_MUTUAL_TLS_ENABLED: "true"
+      JWS_SIGN: "false"
+      VALIDATE_INBOUND_JWS: "false"
+      ENABLE_BACKEND_EVENT_HANDLER: "false"
+      ENABLE_FSPIOP_EVENT_HANDLER: "false"
+      API_TYPE: fspiop
+      ILP_VERSION: "4"
+      CHECK_ILP: "false"
+      AUTO_ACCEPT_PARTY: "true"
+      AUTO_ACCEPT_QUOTES: "true"
+      RESOURCE_VERSIONS: transfers=2.0,quotes=2.0,participants=2.0,parties=2.0,transactionRequests=1.1
+    networks:
+      - sdk-mt
+      - cmcalavi
+
+networks:
+  sdk-mt:
+  cmcalavi:
+    external: true
+    name: ${CMCALAVI_DOCKER_NET:?set CMCALAVI_DOCKER_NET to mcm-agent-cmcalavi network}

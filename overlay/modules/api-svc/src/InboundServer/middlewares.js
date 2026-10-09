@@ -439,7 +439,10 @@ const resolveDfspId = (conf, ctx) => {
     }
     if (dest) return dest;
     const first = host.split('.')[0];
-    return first && first !== 'localhost' && first !== '127' ? first : undefined;
+    if (first && dfspConfigStore.has(first)) return first;
+    const ids = dfspConfigStore.list();
+    if (ids.length === 1) return ids[0];
+    return undefined;
 };
 
 const stripPm4mlOutboundPrefix = (conf) => async (ctx, next) => {
