@@ -233,6 +233,7 @@ class Server extends EventEmitter {
                 this.logger.info('PM4ML tenant config upserted', {
                     dfspId: saved && saved.dfspId,
                     tenants: dfspConfigStore.list(),
+                    hasOutboundClientCert: Boolean(saved && saved.outboundTls && saved.outboundTls.creds && saved.outboundTls.creds.cert),
                 });
             } catch (err) {
                 this.logger.push({ err, endpoint: key }).error('tenant upsert failed');
@@ -284,6 +285,7 @@ class Server extends EventEmitter {
             this.logger.info('PM4ML tenant config loaded from CONFIGURATION.READ', {
                 dfspId: slice.dfspId,
                 tenants: dfspConfigStore.list(),
+                hasOutboundClientCert: Boolean(slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.cert),
             });
         } catch (err) {
             logger.push({ err }).warn('initial CONFIGURATION.READ failed; waiting for NOTIFY');

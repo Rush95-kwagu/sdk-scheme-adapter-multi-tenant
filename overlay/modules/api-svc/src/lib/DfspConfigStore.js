@@ -24,6 +24,15 @@ function stripLeadingScheme(value) {
     return value.replace(/^https?:\/\//i, '');
 }
 
+function copyTls(tls) {
+    if (!tls || typeof tls !== 'object') return tls;
+    return {
+        ...tls,
+        mutualTLS: tls.mutualTLS && { ...tls.mutualTLS },
+        creds: tls.creds && { ...tls.creds },
+    };
+}
+
 function pickTenantSlice(conf) {
     const slice = {};
     for (const k of TENANT_KEYS) {
@@ -34,6 +43,16 @@ function pickTenantSlice(conf) {
         if (k.endsWith('Endpoint') && typeof slice[k] === 'string') {
             slice[k] = stripLeadingScheme(slice[k]);
         }
+    }
+    // Certs mTLS Hub (extapi) : le NOTIFY PM4ML les met dans outbound.tls.creds.
+    if (conf.outbound && conf.outbound.tls) {
+        slice.outboundTls = copyTls(conf.outbound.tls);
+    }
+    if (conf.inbound && conf.inbound.tls) {
+        slice.inboundTls = copyTls(conf.inbound.tls);
+    }
+    if (conf.mutualTLS) {
+        slice.mutualTLS = conf.mutualTLS;
     }
     return slice;
 }
@@ -76,12 +95,49 @@ class DfspConfigStore {
     applyTo(baseConf, dfspId) {
         const tenant = this.get(dfspId);
         if (!tenant) return baseConf;
-        return {
+        const {
+            outboundTls,
+            inboundTls,
+            mutualTLS,
+            ...flat
+        } = tenant;
+        const next = {
             ...baseConf,
-            ...tenant,
+            ...flat,
             dfspId,
             peerJWSKeys: this.peerJWSKeys,
         };
+        if (outboundTls) {
+            next.outbound = {
+                ...baseConf.outbound,
+                tls: {
+                    ...baseConf.outbound?.tls,
+                    ...outboundTls,
+                    creds: {
+                        ...baseConf.outbound?.tls?.creds,
+                        ...outboundTls.creds,
+                    },
+                },
+            };
+        }
+        if (inboundTls) {
+            next.inbound = {
+                ...baseConf.inbound,
+                tls: {
+                    ...baseConf.inbound?.tls,
+                    ...inboundTls,
+                    creds: {
+                        ...baseConf.inbound?.tls?.creds,
+                        ...inboundTls.creds,
+                    },
+                },
+            };
+        }
+        if (mutualTLS) {
+            next.mutualTLS = mutualTLS;
+            next.tls = mutualTLS.outboundRequests;
+        }
+        return next;
     }
 }
 
