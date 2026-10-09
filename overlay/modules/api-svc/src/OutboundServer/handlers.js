@@ -123,14 +123,23 @@ const handleRequestSimpleTransfersInformationError = (method, err, ctx) =>
     handleError(method, err, ctx, 'requestSimpleTransfersInformationState');
 
 
-const createOutboundTransfersModel = (ctx) => new OutboundTransfersModel({
-    ...ctx.state.conf,
-    ...(ctx.state.path?.params?.dfspId && { dfspId: ctx.state.path.params.dfspId }),
-    cache: ctx.state.cache,
-    logger: ctx.state.logger,
-    wso2: ctx.state.wso2,
-    metricsClient: ctx.state.metricsClient,
-});
+const createOutboundTransfersModel = (ctx) => {
+    const dfspConfigStore = require('../lib/DfspConfigStore');
+    const dfspId = ctx.state.pm4mlDfspId
+        || ctx.state.path?.params?.dfspId
+        || ctx.state.conf.dfspId;
+    const conf = (dfspId && dfspConfigStore.has(dfspId))
+        ? dfspConfigStore.applyTo(ctx.state.conf, dfspId)
+        : ctx.state.conf;
+    return new OutboundTransfersModel({
+        ...conf,
+        dfspId,
+        cache: ctx.state.cache,
+        logger: ctx.state.logger,
+        wso2: ctx.state.wso2,
+        metricsClient: ctx.state.metricsClient,
+    });
+};
 
 const createOutboundBulkTransfersModel = (ctx) => new OutboundBulkTransfersModel({
     ...ctx.state.conf,

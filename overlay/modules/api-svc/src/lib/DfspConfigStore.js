@@ -46,11 +46,12 @@ function toNodeCert(value) {
 
 function copyTls(tls) {
     if (!tls || typeof tls !== 'object') return tls;
-    const creds = tls.creds && {
-        ...tls.creds,
-        ca: toNodeCert(tls.creds.ca),
-        cert: toNodeCert(tls.creds.cert),
-        key: toNodeCert(tls.creds.key),
+    const raw = tls.creds || {};
+    const creds = {
+        ...raw,
+        ca: toNodeCert(raw.ca),
+        cert: toNodeCert(raw.cert || raw.certificate || raw.clientCert),
+        key: toNodeCert(raw.key || raw.privateKey || raw.clientKey),
     };
     return {
         ...tls,

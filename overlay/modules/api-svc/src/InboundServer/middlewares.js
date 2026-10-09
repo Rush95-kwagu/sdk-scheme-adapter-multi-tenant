@@ -425,6 +425,7 @@ const applyState = (sharedState) => async (ctx, next) => {
 };
 
 const resolveDfspId = (conf, ctx) => {
+    if (ctx.state.pm4mlDfspId) return ctx.state.pm4mlDfspId;
     const fromPath = ctx.state.path?.params?.dfspId;
     if (fromPath) return fromPath;
     const dest = ctx.request.headers['fspiop-destination'];
@@ -453,6 +454,7 @@ const stripPm4mlOutboundPrefix = (conf) => async (ctx, next) => {
     if (segs[0] && dfspConfigStore.has(segs[0])) {
         const dfspId = segs[0];
         const rest = `/${segs.slice(1).join('/')}` || '/';
+        ctx.state.pm4mlDfspId = dfspId;
         ctx.state.path = ctx.state.path || { params: {} };
         ctx.state.path.params = { ...ctx.state.path.params, dfspId };
         ctx.path = rest;
@@ -469,10 +471,20 @@ const applyPm4mlTenant = (conf) => async (ctx, next) => {
     if (dfspId) {
         ctx.state.path = ctx.state.path || { params: {} };
         ctx.state.path.params = { ...ctx.state.path.params, dfspId };
+        ctx.state.pm4mlDfspId = dfspId;
         if (dfspConfigStore.has(dfspId)) {
             ctx.state.conf = dfspConfigStore.applyTo(ctx.state.conf, dfspId);
+            const creds = ctx.state.conf.outbound && ctx.state.conf.outbound.tls && ctx.state.conf.outbound.tls.creds;
+            const cert = creds && creds.cert;
+            const key = creds && creds.key;
+            ctx.state.logger?.push?.({
+                dfspId,
+                tlsEnabled: Boolean(ctx.state.conf.outbound && ctx.state.conf.outbound.tls && ctx.state.conf.outbound.tls.mutualTLS && ctx.state.conf.outbound.tls.mutualTLS.enabled),
+                credsKeys: creds ? Object.keys(creds) : [],
+                certBytes: typeof cert === 'string' ? cert.length : (Buffer.isBuffer(cert) ? cert.length : null),
+                keyBytes: typeof key === 'string' ? key.length : (Buffer.isBuffer(key) ? key.length : null),
+            }).info?.('resolved PM4ML tenant');
         }
-        ctx.state.logger?.push?.({ dfspId }).debug?.('resolved PM4ML tenant');
     }
     await next();
 };

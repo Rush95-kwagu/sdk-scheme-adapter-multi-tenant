@@ -92,8 +92,8 @@ class OutboundApi extends EventEmitter {
         }
 
         this._api.use(inboundMiddlewares.stripPm4mlOutboundPrefix(conf));
-        this._api.use(inboundMiddlewares.applyPm4mlTenant(conf));
         this._api.use(middlewares.createRequestValidator(validator));
+        this._api.use(inboundMiddlewares.applyPm4mlTenant(conf));
         this._api.use(router(handlers, {
             ...conf,
             multiDfsp: conf.pm4mlMultiTenant ? false : conf.multiDfsp,
