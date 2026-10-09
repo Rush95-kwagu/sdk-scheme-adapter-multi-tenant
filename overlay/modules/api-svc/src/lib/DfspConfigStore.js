@@ -67,7 +67,7 @@ function hasPem(value) {
 
 function copyTls(tls) {
     if (!tls || typeof tls !== 'object') return tls;
-    const raw = tls.creds || {};
+    const raw = tls.creds || tls;
     const creds = {
         ca: pemString(raw.ca),
         cert: pemString(raw.cert || raw.certificate || raw.clientCert),
@@ -84,6 +84,7 @@ function copyTls(tls) {
 }
 
 function pickTenantSlice(conf) {
+    if (!conf || typeof conf !== 'object') return {};
     const slice = {};
     for (const k of TENANT_KEYS) {
         if (conf[k] !== undefined) slice[k] = conf[k];
@@ -94,12 +95,14 @@ function pickTenantSlice(conf) {
             slice[k] = stripLeadingScheme(slice[k]);
         }
     }
-    // Certs mTLS Hub (extapi) : le NOTIFY PM4ML les met dans outbound.tls.creds.
-    if (conf.outbound && conf.outbound.tls) {
-        slice.outboundTls = copyTls(conf.outbound.tls);
+    // Certs mTLS Hub : outbound.tls.creds, ou un slice déjà aplati (outboundTls).
+    const outboundSrc = (conf.outbound && conf.outbound.tls) || conf.outboundTls;
+    if (outboundSrc) {
+        slice.outboundTls = copyTls(outboundSrc);
     }
-    if (conf.inbound && conf.inbound.tls) {
-        slice.inboundTls = copyTls(conf.inbound.tls);
+    const inboundSrc = (conf.inbound && conf.inbound.tls) || conf.inboundTls;
+    if (inboundSrc) {
+        slice.inboundTls = copyTls(inboundSrc);
     }
     if (conf.mutualTLS) {
         slice.mutualTLS = conf.mutualTLS;
@@ -166,19 +169,20 @@ class DfspConfigStore {
             dfspId,
             peerJWSKeys: this.peerJWSKeys,
         };
-        if (outboundTls) {
+        if (outboundTls && outboundTls.creds) {
+            const hasClient = hasPem(outboundTls.creds.cert) && hasPem(outboundTls.creds.key);
             next.outbound = {
                 ...baseConf.outbound,
                 tls: {
                     mutualTLS: {
-                        enabled: true,
                         ...(baseConf.outbound && baseConf.outbound.tls && baseConf.outbound.tls.mutualTLS),
                         ...(outboundTls.mutualTLS || {}),
+                        enabled: hasClient,
                     },
                     creds: {
-                        ca: outboundTls.creds && outboundTls.creds.ca,
-                        cert: outboundTls.creds && outboundTls.creds.cert,
-                        key: outboundTls.creds && outboundTls.creds.key,
+                        ca: outboundTls.creds.ca,
+                        cert: outboundTls.creds.cert,
+                        key: outboundTls.creds.key,
                     },
                 },
             };

@@ -129,7 +129,20 @@ class InboundApi extends EventEmitter {
         api.use(async (ctx, next) => {
             if (conf.pm4mlMultiTenant && ctx.method === 'GET' && ctx.path === '/pm4ml-tenants') {
                 const dfspConfigStore = require('../lib/DfspConfigStore');
-                ctx.body = { tenants: dfspConfigStore.list() };
+                ctx.body = {
+                    tenants: dfspConfigStore.list(),
+                    tls: dfspConfigStore.list().map((id) => {
+                        const t = dfspConfigStore.get(id);
+                        const cert = t && t.outboundTls && t.outboundTls.creds && t.outboundTls.creds.cert;
+                        const key = t && t.outboundTls && t.outboundTls.creds && t.outboundTls.creds.key;
+                        return {
+                            dfspId: id,
+                            outboundCertBytes: typeof cert === 'string' ? cert.length : null,
+                            outboundKeyBytes: typeof key === 'string' ? key.length : null,
+                            certHead: typeof cert === 'string' ? cert.slice(0, 27) : null,
+                        };
+                    }),
+                };
                 ctx.status = 200;
                 return;
             }

@@ -227,9 +227,10 @@ class Server extends EventEmitter {
         const appConfig = JSON.parse(JSON.stringify(this.conf));
         const onReconfigure = (newConf) => {
             try {
-                const slice = dfspConfigStore.pickTenantSlice(newConf);
-                slice.dfspId = newConf.dfspId || endpoint.dfspId;
-                const saved = dfspConfigStore.upsert(slice);
+                const saved = dfspConfigStore.upsert({
+                    ...newConf,
+                    dfspId: (newConf && newConf.dfspId) || endpoint.dfspId,
+                });
                 const cert = saved && saved.outboundTls && saved.outboundTls.creds && saved.outboundTls.creds.cert;
                 this.logger.info('PM4ML tenant config upserted', {
                     dfspId: saved && saved.dfspId,
@@ -282,19 +283,18 @@ class Server extends EventEmitter {
             }, logger, client);
             const fromAgent = updated || {};
             const merged = _.merge(JSON.parse(JSON.stringify(this.conf)), updated || {});
-            const slice = dfspConfigStore.pickTenantSlice({
+            const saved = dfspConfigStore.upsert({
                 ...merged,
                 ...fromAgent,
                 outbound: fromAgent.outbound || merged.outbound,
                 inbound: fromAgent.inbound || merged.inbound,
                 mutualTLS: fromAgent.mutualTLS || merged.mutualTLS,
                 jwsSigningKey: fromAgent.jwsSigningKey || merged.jwsSigningKey,
+                dfspId: fromAgent.dfspId || endpoint.dfspId || merged.dfspId,
             });
-            slice.dfspId = fromAgent.dfspId || endpoint.dfspId || merged.dfspId;
-            dfspConfigStore.upsert(slice);
-            const cert = slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.cert;
+            const cert = saved && saved.outboundTls && saved.outboundTls.creds && saved.outboundTls.creds.cert;
             this.logger.info('PM4ML tenant config loaded from CONFIGURATION.READ', {
-                dfspId: slice.dfspId,
+                dfspId: saved && saved.dfspId,
                 tenants: dfspConfigStore.list(),
                 hasOutboundClientCert: Boolean(cert),
                 certKind: cert == null ? null : (Buffer.isBuffer(cert) ? 'buffer' : typeof cert),
