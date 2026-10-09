@@ -137,6 +137,7 @@ class InboundApi extends EventEmitter {
                         const key = t && t.outboundTls && t.outboundTls.creds && t.outboundTls.creds.key;
                         return {
                             dfspId: id,
+                            backendEndpoint: t && t.backendEndpoint,
                             outboundCertBytes: typeof cert === 'string' ? cert.length : null,
                             outboundKeyBytes: typeof key === 'string' ? key.length : null,
                             certHead: typeof cert === 'string' ? cert.slice(0, 27) : null,

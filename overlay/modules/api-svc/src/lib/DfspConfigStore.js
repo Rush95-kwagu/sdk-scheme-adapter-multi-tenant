@@ -24,6 +24,12 @@ function stripLeadingScheme(value) {
     return value.replace(/^https?:\/\//i, '');
 }
 
+function isPlaceholderBackend(value) {
+    if (value == null || value === '') return true;
+    const s = String(value).replace(/^https?:\/\//i, '');
+    return s === '127.0.0.1:9' || s.startsWith('127.0.0.1:9/');
+}
+
 function fixPem(value) {
     const v = toNodeCert(value);
     if (typeof v === 'string' && v.includes('\\n') && !v.includes('\n')) {
@@ -95,6 +101,9 @@ function pickTenantSlice(conf) {
             slice[k] = stripLeadingScheme(slice[k]);
         }
     }
+    if (isPlaceholderBackend(slice.backendEndpoint)) {
+        delete slice.backendEndpoint;
+    }
     // Certs mTLS Hub : outbound.tls.creds, ou un slice déjà aplati (outboundTls).
     const outboundSrc = (conf.outbound && conf.outbound.tls) || conf.outboundTls;
     if (outboundSrc) {
@@ -126,15 +135,22 @@ class DfspConfigStore {
         }
         const slice = pickTenantSlice(confSlice);
         slice.dfspId = dfspId;
-        const existing = this._tenants.get(dfspId);
+        const existing = this._tenants.get(dfspId) || {};
         const incomingPem = hasPem(slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.cert)
             && hasPem(slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.key);
-        const existingPem = existing && hasPem(existing.outboundTls && existing.outboundTls.creds && existing.outboundTls.creds.cert)
+        const existingPem = hasPem(existing.outboundTls && existing.outboundTls.creds && existing.outboundTls.creds.cert)
             && hasPem(existing.outboundTls && existing.outboundTls.creds && existing.outboundTls.creds.key);
         if (existingPem && !incomingPem) {
             slice.outboundTls = existing.outboundTls;
             slice.inboundTls = slice.inboundTls || existing.inboundTls;
         }
+        for (const k of TENANT_KEYS) {
+            if (slice[k] === undefined && existing[k] !== undefined) {
+                slice[k] = existing[k];
+            }
+        }
+        if (!slice.outboundTls && existing.outboundTls) slice.outboundTls = existing.outboundTls;
+        if (!slice.inboundTls && existing.inboundTls) slice.inboundTls = existing.inboundTls;
         this._tenants.set(dfspId, slice);
         if (slice.peerJWSKeys && typeof slice.peerJWSKeys === 'object') {
             Object.assign(this.peerJWSKeys, slice.peerJWSKeys);
@@ -163,12 +179,18 @@ class DfspConfigStore {
             mutualTLS,
             ...flat
         } = tenant;
+        if (isPlaceholderBackend(flat.backendEndpoint)) {
+            delete flat.backendEndpoint;
+        }
         const next = {
             ...baseConf,
             ...flat,
             dfspId,
             peerJWSKeys: this.peerJWSKeys,
         };
+        if (isPlaceholderBackend(next.backendEndpoint) && tenant.backendEndpoint) {
+            next.backendEndpoint = tenant.backendEndpoint;
+        }
         if (outboundTls && outboundTls.creds) {
             const hasClient = hasPem(outboundTls.creds.cert) && hasPem(outboundTls.creds.key);
             next.outbound = {

@@ -44,7 +44,9 @@ services:
       TRANSACTION_REQUESTS_ENDPOINT: extapi.openmfi.org
       BULK_QUOTES_ENDPOINT: extapi.openmfi.org
       BULK_TRANSFERS_ENDPOINT: extapi.openmfi.org
-      BACKEND_ENDPOINT: 127.0.0.1:9
+      # Fallback si le NOTIFY agent n’envoie pas backendEndpoint.
+      # Les deux stacks lab pointent aujourd’hui le même OpenCBS.
+      BACKEND_ENDPOINT: 172.16.2.16:8100
       INBOUND_LISTEN_PORT: "5000"
       OUTBOUND_LISTEN_PORT: "5001"
       METRICS_SERVER_LISTEN_PORT: "5040"
