@@ -52,13 +52,26 @@ function toNodeCert(value) {
     return value;
 }
 
+function pemString(value) {
+    const v = fixPem(value);
+    if (v == null || v === '') return undefined;
+    if (Buffer.isBuffer(v)) return v.toString('utf8');
+    if (typeof v === 'string') return v;
+    return undefined;
+}
+
+function hasPem(value) {
+    const s = pemString(value);
+    return Boolean(s && s.length > 50);
+}
+
 function copyTls(tls) {
     if (!tls || typeof tls !== 'object') return tls;
     const raw = tls.creds || {};
     const creds = {
-        ca: fixPem(raw.ca),
-        cert: fixPem(raw.cert || raw.certificate || raw.clientCert),
-        key: fixPem(raw.key || raw.privateKey || raw.clientKey),
+        ca: pemString(raw.ca),
+        cert: pemString(raw.cert || raw.certificate || raw.clientCert),
+        key: pemString(raw.key || raw.privateKey || raw.clientKey),
     };
     const out = { creds };
     if (tls.mutualTLS) {
@@ -110,6 +123,15 @@ class DfspConfigStore {
         }
         const slice = pickTenantSlice(confSlice);
         slice.dfspId = dfspId;
+        const existing = this._tenants.get(dfspId);
+        const incomingPem = hasPem(slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.cert)
+            && hasPem(slice.outboundTls && slice.outboundTls.creds && slice.outboundTls.creds.key);
+        const existingPem = existing && hasPem(existing.outboundTls && existing.outboundTls.creds && existing.outboundTls.creds.cert)
+            && hasPem(existing.outboundTls && existing.outboundTls.creds && existing.outboundTls.creds.key);
+        if (existingPem && !incomingPem) {
+            slice.outboundTls = existing.outboundTls;
+            slice.inboundTls = slice.inboundTls || existing.inboundTls;
+        }
         this._tenants.set(dfspId, slice);
         if (slice.peerJWSKeys && typeof slice.peerJWSKeys === 'object') {
             Object.assign(this.peerJWSKeys, slice.peerJWSKeys);
