@@ -34,7 +34,8 @@ services:
       PM4ML_ENABLED: "true"
       PM4ML_MULTI_TENANT: "true"
       DFSP_HOST_SUFFIX: ".ext.openmfi.org"
-      MGMT_API_WS_URLS: "mcm-agent-cmcalavi:4004"
+      # L'agent réel n'envoie pas toujours dfspId dans NOTIFY — l'ancre est le préfixe avant @.
+      MGMT_API_WS_URLS: "cmcalavi@mcm-agent-cmcalavi:4004"
       DFSP_ID: placeholder
       CACHE_URL: redis://redis:6379
       PEER_ENDPOINT: extapi.openmfi.org

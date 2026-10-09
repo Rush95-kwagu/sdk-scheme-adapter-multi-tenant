@@ -228,7 +228,7 @@ class Server extends EventEmitter {
         const onReconfigure = (newConf) => {
             try {
                 const slice = dfspConfigStore.pickTenantSlice(newConf);
-                slice.dfspId = newConf.dfspId;
+                slice.dfspId = newConf.dfspId || endpoint.dfspId;
                 const saved = dfspConfigStore.upsert(slice);
                 this.logger.info('PM4ML tenant config upserted', {
                     dfspId: saved && saved.dfspId,
@@ -279,7 +279,7 @@ class Server extends EventEmitter {
             const fromAgent = updated && updated.dfspId ? updated : {};
             const merged = _.merge(JSON.parse(JSON.stringify(this.conf)), updated || {});
             const slice = dfspConfigStore.pickTenantSlice({ ...merged, ...fromAgent });
-            slice.dfspId = fromAgent.dfspId || merged.dfspId;
+            slice.dfspId = fromAgent.dfspId || endpoint.dfspId || merged.dfspId;
             dfspConfigStore.upsert(slice);
             this.logger.info('PM4ML tenant config loaded from CONFIGURATION.READ', {
                 dfspId: slice.dfspId,

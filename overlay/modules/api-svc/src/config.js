@@ -80,13 +80,21 @@ function parseMgmtApiWsEndpoints() {
     if (urls) {
         return urls.split(',').map((entry) => {
             const trimmed = entry.trim();
-            const idx = trimmed.lastIndexOf(':');
+            let dfspId;
+            let rest = trimmed;
+            const at = trimmed.indexOf('@');
+            if (at > 0) {
+                dfspId = trimmed.slice(0, at);
+                rest = trimmed.slice(at + 1);
+            }
+            const idx = rest.lastIndexOf(':');
             if (idx === -1) {
-                return { address: trimmed, port: 4004 };
+                return { address: rest, port: 4004, dfspId };
             }
             return {
-                address: trimmed.slice(0, idx),
-                port: Number(trimmed.slice(idx + 1)),
+                address: rest.slice(0, idx),
+                port: Number(rest.slice(idx + 1)),
+                dfspId,
             };
         });
     }

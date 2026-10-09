@@ -58,7 +58,14 @@ curl -sS http://127.0.0.1:11000/pm4ml-tenants
 docker logs --tail 80 sdk-mt-sdk-1 2>&1 | grep -E 'cmcalavi|NOTIFY|tenant|error' || true
 ```
 
-Attendu : `{"tenants":["cmcalavi"]}`.
+Attendu : `{"tenants":["cmcalavi"]}`. Si `[]` : l’agent n’a pas fourni `dfspId` (corrigé par `cmcalavi@mcm-agent-…` après rebuild) ; ou le SDK n’est pas sur le réseau de l’agent :
+
+```bash
+docker inspect sdk-mt-sdk-1 -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+docker exec sdk-mt-sdk-1 getent hosts mcm-agent-cmcalavi
+docker logs sdk-mt-sdk-1 2>&1 | grep -E 'upsert|placeholder|waiting for mcm|CONFIGURATION|tenant'
+docker restart mcm-agent-cmcalavi
+```
 
 Inbound (bypass WAF) :
 
