@@ -24,6 +24,14 @@ function stripLeadingScheme(value) {
     return value.replace(/^https?:\/\//i, '');
 }
 
+function fixPem(value) {
+    const v = toNodeCert(value);
+    if (typeof v === 'string' && v.includes('\\n') && !v.includes('\n')) {
+        return v.replace(/\\n/g, '\n');
+    }
+    return v;
+}
+
 function toNodeCert(value) {
     if (value == null) return value;
     if (Buffer.isBuffer(value)) return value;
@@ -48,16 +56,18 @@ function copyTls(tls) {
     if (!tls || typeof tls !== 'object') return tls;
     const raw = tls.creds || {};
     const creds = {
-        ...raw,
-        ca: toNodeCert(raw.ca),
-        cert: toNodeCert(raw.cert || raw.certificate || raw.clientCert),
-        key: toNodeCert(raw.key || raw.privateKey || raw.clientKey),
+        ca: fixPem(raw.ca),
+        cert: fixPem(raw.cert || raw.certificate || raw.clientCert),
+        key: fixPem(raw.key || raw.privateKey || raw.clientKey),
     };
-    return {
-        ...tls,
-        mutualTLS: tls.mutualTLS && { ...tls.mutualTLS },
-        creds,
-    };
+    const out = { creds };
+    if (tls.mutualTLS) {
+        out.mutualTLS = { ...tls.mutualTLS };
+    }
+    if (tls.enabled !== undefined) {
+        out.enabled = tls.enabled;
+    }
+    return out;
 }
 
 function pickTenantSlice(conf) {
@@ -138,11 +148,15 @@ class DfspConfigStore {
             next.outbound = {
                 ...baseConf.outbound,
                 tls: {
-                    ...baseConf.outbound?.tls,
-                    ...outboundTls,
+                    mutualTLS: {
+                        enabled: true,
+                        ...(baseConf.outbound && baseConf.outbound.tls && baseConf.outbound.tls.mutualTLS),
+                        ...(outboundTls.mutualTLS || {}),
+                    },
                     creds: {
-                        ...baseConf.outbound?.tls?.creds,
-                        ...outboundTls.creds,
+                        ca: outboundTls.creds && outboundTls.creds.ca,
+                        cert: outboundTls.creds && outboundTls.creds.cert,
+                        key: outboundTls.creds && outboundTls.creds.key,
                     },
                 },
             };

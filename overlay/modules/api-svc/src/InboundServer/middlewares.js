@@ -477,13 +477,13 @@ const applyPm4mlTenant = (conf) => async (ctx, next) => {
             const creds = ctx.state.conf.outbound && ctx.state.conf.outbound.tls && ctx.state.conf.outbound.tls.creds;
             const cert = creds && creds.cert;
             const key = creds && creds.key;
-            ctx.state.logger?.push?.({
+            ctx.state.logger.info('resolved PM4ML tenant', {
                 dfspId,
                 tlsEnabled: Boolean(ctx.state.conf.outbound && ctx.state.conf.outbound.tls && ctx.state.conf.outbound.tls.mutualTLS && ctx.state.conf.outbound.tls.mutualTLS.enabled),
                 credsKeys: creds ? Object.keys(creds) : [],
                 certBytes: typeof cert === 'string' ? cert.length : (Buffer.isBuffer(cert) ? cert.length : null),
                 keyBytes: typeof key === 'string' ? key.length : (Buffer.isBuffer(key) ? key.length : null),
-            }).info?.('resolved PM4ML tenant');
+            });
         }
     }
     await next();
