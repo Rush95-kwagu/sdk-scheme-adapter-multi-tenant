@@ -45,8 +45,9 @@ services:
       BULK_QUOTES_ENDPOINT: extapi.openmfi.org
       BULK_TRANSFERS_ENDPOINT: extapi.openmfi.org
       # Fallback si le NOTIFY agent n’envoie pas backendEndpoint.
-      # Les deux stacks lab pointent aujourd’hui le même OpenCBS.
-      BACKEND_ENDPOINT: 172.16.2.16:8100
+      # GET /mojaloop = SPA HTML ; l’API OpenCBS est sous /mojaloop/parties, /mojaloop/quoterequests.
+      # La valeur réelle vient du NOTIFY mcm-agent — changer aussi le .env des deux agents.
+      BACKEND_ENDPOINT: 172.16.2.16:8100/mojaloop
       INBOUND_LISTEN_PORT: "5000"
       OUTBOUND_LISTEN_PORT: "5001"
       METRICS_SERVER_LISTEN_PORT: "5040"

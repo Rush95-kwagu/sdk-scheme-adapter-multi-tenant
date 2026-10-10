@@ -29,10 +29,13 @@ Plusieurs backends : **oui**. Le SDK ne suppose pas un CBS unique. Chaque `NOTIF
 Exemples :
 
 ```text
+cmcalavi / gto      →  172.16.2.16:8100/mojaloop
 clcam-calavi-test   →  172.16.2.16:8101/mojaloop
 clcam-jardins-test  →  172.16.2.16:8102/mojaloop
 moov                →  192.168.0.140:8000/mojaloop
 ```
+
+`172.16.2.16:8100` sans `/mojaloop` est le SPA Granian (GET HTML, POST `/quoterequests` → 405). L’API connecteur est `…:8100/mojaloop`. Le NOTIFY agent écrase le fallback Compose : changer le `.env` des **deux** agents puis les recréer.
 
 Sans espace dans l’URL. Sans `http://` : le SDK préfixe `http://` tout seul (`http://http://…` casse).
 
