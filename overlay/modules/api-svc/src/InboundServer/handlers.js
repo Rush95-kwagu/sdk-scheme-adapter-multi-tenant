@@ -80,6 +80,44 @@ const createInboundTransfersModel = (ctx) => new InboundTransfersModel({
     resourceVersions: ctx.resourceVersions,
 });
 
+/**
+ * Hub PUT /parties requires partyIdInfo.partyIdType + partyIdentifier.
+ * OpenCBS often returns only { fspId } (or omits idType/idValue). Fill from the GET path.
+ */
+const ensureInternalPartyIds = (model, ctx, idType, idValue, idSubValue) => {
+    const backend = model._backendRequests;
+    if (!backend || typeof backend.getParties !== 'function') {
+        return;
+    }
+    const origGet = backend.getParties.bind(backend);
+    backend.getParties = async (type, value, sub) => {
+        const response = await origGet(type, value, sub);
+        const keys = response && typeof response === 'object' ? Object.keys(response) : [];
+        ctx.state.logger.isInfoEnabled && ctx.state.logger.push({
+            backendPartyKeys: keys,
+            hasIdType: Boolean(response?.idType),
+            hasIdValue: Boolean(response?.idValue),
+        }).info('backend GET /parties response shape');
+        if (!response || typeof response !== 'object') {
+            return response;
+        }
+        const party = { ...response };
+        if (!party.idType) {
+            party.idType = type || idType;
+        }
+        if (!party.idValue) {
+            party.idValue = value || idValue;
+        }
+        if ((sub || idSubValue) && !party.idSubValue) {
+            party.idSubValue = sub || idSubValue;
+        }
+        if (!party.fspId) {
+            party.fspId = model._dfspId || ctx.state.conf.dfspId;
+        }
+        return party;
+    };
+};
+
 const prepareResponse = ctx => {
     ctx.response.status = ReturnCodes.ACCEPTED.CODE;
     ctx.response.body = '';
@@ -163,6 +201,7 @@ const getPartiesByTypeAndId = async (ctx) => {
         try {
             // use the transfers model to execute asynchronous stages with the switch
             const model = createInboundTransfersModel(ctx);
+            ensureInternalPartyIds(model, ctx, idType, idValue, subIdValue);
 
             const response = await model.getParties(idType, idValue, subIdValue, sourceFspId, extractTraceHeaders(ctx));
 
