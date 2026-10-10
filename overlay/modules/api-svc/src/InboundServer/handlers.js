@@ -82,26 +82,13 @@ const createInboundTransfersModel = (ctx) => new InboundTransfersModel({
 
 /**
  * Hub PUT /parties requires partyIdInfo.partyIdType + partyIdentifier.
- * OpenCBS often returns only { fspId } (or omits idType/idValue). Fill from the GET path.
+ * CBS may return HTML, a string, or a thin object; still fill ids from the GET path
+ * and patch the outbound PUT body so Envoy cannot 3102.
  */
 const ensureInternalPartyIds = (model, ctx, idType, idValue, idSubValue) => {
-    const backend = model._backendRequests;
-    if (!backend || typeof backend.getParties !== 'function') {
-        return;
-    }
-    const origGet = backend.getParties.bind(backend);
-    backend.getParties = async (type, value, sub) => {
-        const response = await origGet(type, value, sub);
-        const keys = response && typeof response === 'object' ? Object.keys(response) : [];
-        ctx.state.logger.isInfoEnabled && ctx.state.logger.push({
-            backendPartyKeys: keys,
-            hasIdType: Boolean(response?.idType),
-            hasIdValue: Boolean(response?.idValue),
-        }).info('backend GET /parties response shape');
-        if (!response || typeof response !== 'object') {
-            return response;
-        }
-        const party = { ...response };
+    const fillParty = (raw, type, value, sub) => {
+        const isObject = raw && typeof raw === 'object' && !Array.isArray(raw);
+        const party = isObject ? { ...raw } : {};
         if (!party.idType) {
             party.idType = type || idType;
         }
@@ -116,6 +103,54 @@ const ensureInternalPartyIds = (model, ctx, idType, idValue, idSubValue) => {
         }
         return party;
     };
+
+    const backend = model._backendRequests;
+    if (backend && typeof backend.getParties === 'function') {
+        const origGet = backend.getParties.bind(backend);
+        backend.getParties = async (type, value, sub) => {
+            const response = await origGet(type, value, sub);
+            const isObject = response && typeof response === 'object' && !Array.isArray(response);
+            ctx.state.logger.isInfoEnabled && ctx.state.logger.push({
+                backendPartyKeys: isObject ? Object.keys(response) : [],
+                responseType: typeof response,
+                preview: typeof response === 'string' ? response.slice(0, 80) : undefined,
+                hasIdType: Boolean(isObject && response.idType),
+                hasIdValue: Boolean(isObject && response.idValue),
+            }).info('backend GET /parties response shape');
+            return fillParty(response, type, value, sub);
+        };
+    }
+
+    const ml = model._mojaloopRequests;
+    if (ml && typeof ml.putParties === 'function') {
+        const origPut = ml.putParties.bind(ml);
+        ml.putParties = (putType, putValue, putSub, body, destFspId, headers) => {
+            const payload = body && typeof body === 'object' ? body : { party: {} };
+            payload.party = payload.party && typeof payload.party === 'object' ? payload.party : {};
+            payload.party.partyIdInfo = payload.party.partyIdInfo && typeof payload.party.partyIdInfo === 'object'
+                ? payload.party.partyIdInfo
+                : {};
+            const info = payload.party.partyIdInfo;
+            if (!info.partyIdType) {
+                info.partyIdType = putType || idType;
+            }
+            if (!info.partyIdentifier) {
+                info.partyIdentifier = putValue || idValue;
+            }
+            if ((putSub || idSubValue) && !info.partySubIdOrType) {
+                info.partySubIdOrType = putSub || idSubValue;
+            }
+            if (!info.fspId) {
+                info.fspId = model._dfspId || ctx.state.conf.dfspId;
+            }
+            ctx.state.logger.isInfoEnabled && ctx.state.logger.push({
+                partyIdType: info.partyIdType,
+                partyIdentifier: info.partyIdentifier,
+                fspId: info.fspId,
+            }).info('PUT /parties body partyIdInfo');
+            return origPut(putType, putValue, putSub, payload, destFspId, headers);
+        };
+    }
 };
 
 const prepareResponse = ctx => {
