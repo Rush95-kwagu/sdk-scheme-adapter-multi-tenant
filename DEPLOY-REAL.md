@@ -8,6 +8,8 @@ Le POC (`poc/`) est validé (2 mock-agents, inbound 202, outbound 200). Ce docum
 
 Le lab openmfi **en production aujourd’hui** reste [N stacks Compose](../../docs/participant/dfsp-onboarding-runbook.md) (un SDK par DFSP). Ne bascule un DFSP réel sur cet overlay qu’après un créneau de test dédié.
 
+Architecture, flux Mermaid, variables, déploiement et onboarding d’un nouveau DFSP : [TECHNICAL.md](TECHNICAL.md).
+
 ---
 
 ## 1. Ce qui est partagé vs ce qui ne l’est pas

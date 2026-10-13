@@ -43,6 +43,8 @@ Gate de succès : `{"tenants":["dfsp-a","dfsp-b"]}` (ordre indifférent). Les de
 
 Arrêt : `docker compose -f poc/docker-compose.yml down -v`.
 
+Documentation technique (architecture, Mermaid, déploiement, nouveau DFSP) : [TECHNICAL.md](TECHNICAL.md).  
+Tableau comparatif (fichiers amont vs overlay, fichiers nouveaux) : [COMPARATIF.md](COMPARATIF.md).  
 Guide déploiement réel (N backends, WAF, MCM) : [DEPLOY-REAL.md](DEPLOY-REAL.md).
 
 ## Brancher des vrais mcm-agents (après le POC)

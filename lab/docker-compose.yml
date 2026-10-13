@@ -5,6 +5,8 @@
 #     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
 #   export GTO_DOCKER_NET=$(docker inspect mcm-agent-gto \
 #     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
+#   export MOOV_TEST_DOCKER_NET=$(docker inspect mcm-agent-moov-test \
+#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
 #   docker compose -f lab/docker-compose.yml up --build -d
 
 name: sdk-mt
@@ -34,7 +36,7 @@ services:
       PM4ML_MULTI_TENANT: "true"
       DFSP_HOST_SUFFIX: ".ext.openmfi.org"
       # L'agent réel n'envoie pas toujours dfspId dans NOTIFY — l'ancre est le préfixe avant @.
-      MGMT_API_WS_URLS: "cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004"
+      MGMT_API_WS_URLS: "cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004,moov-test@mcm-agent-moov-test:4004"
       DFSP_ID: placeholder
       CACHE_URL: redis://redis:6379
       PEER_ENDPOINT: extapi.openmfi.org
@@ -67,6 +69,7 @@ services:
       - sdk-mt
       - cmcalavi
       - gto
+      - moov-test
 
 networks:
   sdk-mt:
@@ -76,3 +79,6 @@ networks:
   gto:
     external: true
     name: ${GTO_DOCKER_NET:?set GTO_DOCKER_NET to mcm-agent-gto network}
+  moov-test:
+    external: true
+    name: ${MOOV_TEST_DOCKER_NET:?set MOOV_TEST_DOCKER_NET to mcm-agent-moov-test network}
