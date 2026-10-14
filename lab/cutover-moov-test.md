@@ -49,7 +49,7 @@ docker stop sdk-scheme-adapter-moov-test
 docker compose -f lab/docker-compose.yml up --build -d
 sleep 15
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
-docker exec sdk-mt-sdk-1 getent hosts mcm-agent-moov-test
+docker exec sdk-fececam getent hosts mcm-agent-moov-test
 ```
 
 Attendu : `"tenants"` contient `cmcalavi`, `gto` **et** `moov-test` ; `backendEndpoint` avec `/mojaloop` ; `outboundCertBytes` > 0.

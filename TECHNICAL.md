@@ -348,8 +348,8 @@ docker stop sdk-scheme-adapter-<dfspId>
 docker compose -f lab/docker-compose.yml up --build -d
 sleep 15
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
-docker exec sdk-mt-sdk-1 getent hosts mcm-agent-gto
-docker exec sdk-mt-sdk-1 getent hosts mcm-agent-cmcalavi
+docker exec sdk-fececam getent hosts mcm-agent-gto
+docker exec sdk-fececam getent hosts mcm-agent-cmcalavi
 ```
 
 Attendu : `"tenants"` contient tous les IDs listés dans `MGMT_API_WS_URLS`.

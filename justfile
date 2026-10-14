@@ -65,7 +65,7 @@ tenants:
     bash "$ROOT/lab/discover-tenants.sh" --print
 
 logs-overlay tail=default_tail:
-    {{docker}} logs sdk-mt-sdk-1 -f --tail="{{tail}}"
+    {{docker}} logs sdk-fececam -f --tail="{{tail}}"
 
 # --- DFSP 1:1 (sdk-scheme-adapter-<id>) ---
 

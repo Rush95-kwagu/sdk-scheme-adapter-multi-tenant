@@ -985,7 +985,7 @@ export IN=11000 OUT=11001 MET=11040   # adapter si ces ports sont pris
 docker compose -f lab/docker-compose.yml up --build -d
 sleep 15
 curl -sS http://127.0.0.1:${IN}/pm4ml-tenants
-docker exec sdk-mt-sdk-1 getent hosts mcm-agent-&lt;idA&gt;
+docker exec sdk-fececam getent hosts mcm-agent-&lt;idA&gt;
 </code></pre>
         <p>Attendu : JSON <code>tenants</code> avec tous les IDs, <code>backendEndpoint</code> contenant <code>/mojaloop</code> (OpenCBS), <code>outboundCertBytes</code> &gt; 0.</p>
 
@@ -1245,7 +1245,7 @@ echo "NEW_NET=$NEW_NET"
 docker compose -f lab/docker-compose.yml up --build -d
 sleep 15
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
-docker exec sdk-mt-sdk-1 getent hosts mcm-agent-${DFSP_ID}
+docker exec sdk-fececam getent hosts mcm-agent-${DFSP_ID}
 </code></pre>
         <p>Le nouvel ID doit apparaître ; les anciens aussi.</p>
 
@@ -1324,7 +1324,7 @@ docker ps -a --filter name=sdk-scheme-adapter-${DFSP_ID}
 docker compose -f lab/docker-compose.yml up --build -d
 sleep 15
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
-docker exec sdk-mt-sdk-1 getent hosts mcm-agent-${DFSP_ID}
+docker exec sdk-fececam getent hosts mcm-agent-${DFSP_ID}
 </code></pre>
         <p>Le JSON doit contenir l’ancien set <strong>et</strong> <code>${DFSP_ID}</code>, certs &gt; 0, backend avec <code>/mojaloop</code>.</p>
 <pre><code>curl -sS -w " HTTP %{http_code}\n" -o /dev/null http://127.0.0.1:11001/${DFSP_ID}/

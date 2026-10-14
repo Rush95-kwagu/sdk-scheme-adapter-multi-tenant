@@ -5,15 +5,17 @@
 #   # ou : bash lab/discover-tenants.sh && docker compose -f lab/docker-compose.yml \
 #   #          -f lab/compose.tenants.yml --env-file lab/.env --env-file lab/.env.tenants up --build -d
 
-name: sdk-mt
+name: sdk-fececam
 
 services:
   redis:
     image: redis:7-alpine
     networks:
-      - sdk-mt
+      - overlay
 
   sdk:
+    container_name: sdk-fececam
+    image: sdk-scheme-adapter-multi-dfsp:latest
     build:
       context: ..
       dockerfile: Dockerfile
@@ -64,7 +66,8 @@ services:
       AUTO_ACCEPT_QUOTES: "true"
       RESOURCE_VERSIONS: transfers=2.0,quotes=2.0,participants=2.0,parties=2.0,transactionRequests=1.1
     networks:
-      - sdk-mt
+      - overlay
 
 networks:
-  sdk-mt:
+  overlay:
+    name: sdk-fececam

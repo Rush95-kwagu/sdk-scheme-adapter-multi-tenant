@@ -49,7 +49,7 @@ curl -sS http://127.0.0.1:11000/pm4ml-tenants
 Attendu : `{"tenants":["cmcalavi","gto"]}` (ordre indifférent).
 
 ```bash
-docker exec sdk-mt-sdk-1 getent hosts mcm-agent-gto
+docker exec sdk-fececam getent hosts mcm-agent-gto
 curl -sS -w " HTTP %{http_code}\n" -o /dev/null http://127.0.0.1:11001/gto/
 curl -sS -o /tmp/in-gto.json -w "HTTP %{http_code}\n" \
   -H "Host: gto.ext.openmfi.org" \

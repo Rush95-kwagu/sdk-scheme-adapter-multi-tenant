@@ -12,7 +12,7 @@ PRINT_ONLY=0
 is_skip_net() {
   case "$1" in
     bridge|host|none|ingress) return 0 ;;
-    sdk-mt|sdk-mt_sdk-mt) return 0 ;;
+    sdk-mt|sdk-mt_sdk-mt|sdk-fececam) return 0 ;;
   esac
   return 1
 }
