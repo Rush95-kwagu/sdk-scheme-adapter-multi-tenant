@@ -1,0 +1,20 @@
+# Documentation web — SDK multi-tenant
+# URL : http://<IP-VM>/documentation   (port 80)
+# Si :80 est pris : DOC_PORT=8080 docker compose up -d
+#   → http://<IP-VM>:8080/documentation
+#
+#   cd contrib/sdk-scheme-adapter-multi-tenant/docs-web
+#   docker compose up -d
+
+name: sdk-mt-docs
+
+services:
+  docs:
+    image: nginx:1.27-alpine
+    container_name: sdk-mt-docs
+    ports:
+      - "${DOC_PORT:-80}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./public:/usr/share/nginx/html/documentation:ro
+    restart: unless-stopped

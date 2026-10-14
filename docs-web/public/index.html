@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SDK multi-tenant — documentation</title>
+  <link rel="stylesheet" href="assets/app.css" />
+</head>
+<body>
+  <div class="layout">
+    <nav class="side">
+      <div class="brand">
+        <h1>SDK scheme-adapter</h1>
+        <p>Overlay multi-tenant · lab openmfi</p>
+      </div>
+      <div class="group">Vue d’ensemble</div>
+      <a class="item" href="#accueil">Accueil</a>
+      <a class="item" href="#fonctionnement">Fonctionnement</a>
+      <a class="item" href="#fonctionnalites">Fonctionnalités</a>
+      <div class="group">Mise en œuvre</div>
+      <a class="item" href="#deploiement">Guide de déploiement</a>
+      <a class="item" href="#prerequis">Prérequis</a>
+      <div class="group">Onboarding</div>
+      <a class="item" href="#nouveau-dfsp">Nouveau DFSP</a>
+      <a class="item" href="#dfsp-existant">DFSP existant (SDK dédié)</a>
+      <div class="group">Référence</div>
+      <a class="item" href="#securite">Sécurité</a>
+      <a class="item" href="#ports">Ports et URL</a>
+    </nav>
+
+    <main>
+      <section id="accueil" class="section">
+        <p><span class="badge">v24.9.0 overlay</span><span class="badge">PM4ML_MULTI_TENANT</span></p>
+        <h2>SDK scheme-adapter multi-tenant</h2>
+        <p class="lead">Un processus SDK, N agents PM4ML (<code>mcm-agent</code>), N backends CBS. Lab openmfi — nœud <code>172.25.2.117</code>.</p>
+        <div class="cards">
+          <div class="card">
+            <h3>Ce que c’est</h3>
+            <p>Surcouche opt-in de <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>. Chaque DFSP garde Vault + mcm-agent ; le SDK agrège certs et backend par requête.</p>
+          </div>
+          <div class="card">
+            <h3>Ce que ce n’est pas</h3>
+            <p>Pas une PR Mojaloop. Pas le défaut production. Le flag <code>MULTI_DFSP</code> (préfixe backend) est un autre mécanisme officiel.</p>
+          </div>
+        </div>
+        <p>Tenants overlay actuels : <code>cmcalavi</code>, <code>gto</code>, <code>moov-test</code>. Le DFSP prod <code>moov</code> (<code>:6000</code>) reste hors overlay.</p>
+        <div class="note">Cette page est servie sur la VM SDK : <strong>http://&lt;IP-VM&gt;/documentation</strong> (lab : <code>http://172.25.2.117/documentation</code>).</div>
+      </section>
+
+      <section id="fonctionnement" class="section">
+        <h2>Fonctionnement</h2>
+        <p>Le SDK officiel n’a qu’un websocket PM4ML. Un <code>CONFIGURATION.NOTIFY</code> déclenche un <code>restart()</code> global — incompatible avec N DFSPs dans le même process.</p>
+        <p>L’overlay (<code>PM4ML_MULTI_TENANT=true</code>) ouvre N websockets (<code>MGMT_API_WS_URLS</code>), range chaque conf dans <code>DfspConfigStore</code> <strong>sans</strong> redémarrer HTTP, et applique le slice (certs mTLS, JWS, <code>backendEndpoint</code>) <strong>par requête</strong>.</p>
+
+        <h3>Avant / après</h3>
+        <div class="flow">
+          <div class="box">1 mcm-agent</div><span class="arrow">→</span>
+          <div class="box">1 SDK</div><span class="arrow">→</span>
+          <div class="box">restart() global</div>
+        </div>
+        <div class="flow">
+          <div class="box">mcm-agent A</div>
+          <div class="box">mcm-agent B</div>
+          <span class="arrow">→</span>
+          <div class="box">1 SDK overlay</div>
+          <span class="arrow">→</span>
+          <div class="box">DfspConfigStore</div>
+          <span class="arrow">→</span>
+          <div class="box">inbound :5000 / outbound :5001</div>
+        </div>
+
+        <h3>Agents PM4ML</h3>
+        <p>L’agent (<code>mcm-agent</code>) n’échange pas de FSPIOP. Il enrôle le DFSP auprès du MCM Hub, stocke les PEM dans <strong>son</strong> Vault, et pousse la conf au SDK en websocket <code>:4004</code> (<code>CONFIGURATION.READ</code> / <code>NOTIFY</code>).</p>
+        <p>Un agent = un DFSP (Hydra, Vault, FQDN, certs). En multi-tenant les agents restent 1:1 ; seul le SDK est partagé.</p>
+
+        <h3>DfspConfigStore</h3>
+        <p>Map mémoire <code>dfspId</code> → backend, endpoints Hub, JWS, PEM outbound. <code>upsert</code> à chaque NOTIFY. <code>applyTo</code> fusionne le slice dans la conf de <em>cette</em> requête. IDs <code>placeholder</code> / <code>mojaloop</code> ignorés. Un restart du conteneur vide le store jusqu’au prochain READ.</p>
+
+        <h3>Résolution du tenant</h3>
+        <table>
+          <tr><th>Sens</th><th>Règle</th></tr>
+          <tr><td>Inbound Hub (<code>/parties</code>, <code>/quotes</code>, <code>/transfers</code>)</td><td>Host = <code>{dfspId}.ext.openmfi.org</code>. Si <code>FSPIOP-Destination</code> est présent, il doit <strong>matcher</strong> le Host (sinon 400).</td></tr>
+          <tr><td>Outbound CBS</td><td>Préfixe obligatoire <code>/{dfspId}/transfers</code>. Sans préfixe → 404.</td></tr>
+        </table>
+
+        <h3>Flux transfert outbound</h3>
+        <div class="flow">
+          <div class="box">CBS POST /gto/transfers</div>
+          <span class="arrow">→</span>
+          <div class="box">SDK lookup ALS</div>
+          <span class="arrow">→</span>
+          <div class="box">WAF payee inbound</div>
+          <span class="arrow">→</span>
+          <div class="box">quote</div>
+          <span class="arrow">→</span>
+          <div class="box">prepare</div>
+          <span class="arrow">→</span>
+          <div class="box">CBS payee</div>
+          <span class="arrow">→</span>
+          <div class="box">fulfil COMPLETED</div>
+        </div>
+        <p>Backend OpenCBS sous <code>host:port/mojaloop</code> (pas le SPA Granian). Table <code>cbs.counterparties</code> obligatoire pour le FSP payer à l’arrivée.</p>
+      </section>
+
+      <section id="fonctionnalites" class="section">
+        <h2>Fonctionnalités</h2>
+        <table>
+          <tr><th>Fonction</th><th>Détail</th></tr>
+          <tr><td>N ControlAgent</td><td><code>MGMT_API_WS_URLS=id@host:4004,...</code> — ancre <code>id@</code> si le NOTIFY omet <code>dfspId</code></td></tr>
+          <tr><td>Upsert sans restart</td><td>Un NOTIFY gto ne coupe pas cmcalavi</td></tr>
+          <tr><td>TLS / JWS par tenant</td><td>Cert client Hub et clé JWS du slice</td></tr>
+          <tr><td>Backend par tenant</td><td>NOTIFY agent écrase le fallback Compose</td></tr>
+          <tr><td>Wrap lookup</td><td>Complète <code>partyIdType</code> / <code>partyIdentifier</code> si le CBS omet les ids (évite 3102)</td></tr>
+          <tr><td><code>GET /pm4ml-tenants</code></td><td>Debug depuis le nœud (<code>127.0.0.1:11000</code>). 404 via le WAF (en-têtes <code>X-Forwarded-*</code>)</td></tr>
+          <tr><td>POC isolé</td><td><code>poc/</code> — 2 mock-agents, sans Hub</td></tr>
+        </table>
+        <h3>Partagé vs 1:1</h3>
+        <table>
+          <tr><th>Partagé</th><th>Un par DFSP</th></tr>
+          <tr><td>Processus SDK overlay, Redis overlay, ports 11000 / 11001</td><td>mcm-agent, Vault, Hydra, FQDN, certs, backend CBS, vhost WAF, UI MCM</td></tr>
+        </table>
+      </section>
+
+      <section id="deploiement" class="section">
+        <h2>Guide de déploiement</h2>
+        <p>Image : <code>FROM mojaloop/sdk-scheme-adapter:v24.9.0</code> + copie <code>overlay/modules/api-svc/src/</code>.</p>
+        <p>Compose lab : <code>lab/docker-compose.yml</code> (Redis + SDK). Les agents restent dans leurs stacks 1:1.</p>
+
+        <h3>Variables SDK overlay</h3>
+        <table>
+          <tr><th>Variable</th><th>Lab</th></tr>
+          <tr><td><code>PM4ML_ENABLED</code></td><td><code>true</code></td></tr>
+          <tr><td><code>PM4ML_MULTI_TENANT</code></td><td><code>true</code></td></tr>
+          <tr><td><code>DFSP_HOST_SUFFIX</code></td><td><code>.ext.openmfi.org</code></td></tr>
+          <tr><td><code>MGMT_API_WS_URLS</code></td><td><code>cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004,moov-test@mcm-agent-moov-test:4004</code></td></tr>
+          <tr><td><code>DFSP_ID</code></td><td><code>placeholder</code></td></tr>
+          <tr><td><code>BACKEND_ENDPOINT</code></td><td>fallback <code>172.16.2.16:8100/mojaloop</code> (écrasé par NOTIFY)</td></tr>
+          <tr><td><code>PEER_ENDPOINT</code> (ALS, quotes, transfers)</td><td><code>extapi.openmfi.org</code> + extra_hosts <code>172.16.2.28</code></td></tr>
+        </table>
+
+        <h3>Démarrage overlay</h3>
+<pre><code>cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant
+
+export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
+  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
+export GTO_DOCKER_NET=$(docker inspect mcm-agent-gto \
+  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
+export MOOV_TEST_DOCKER_NET=$(docker inspect mcm-agent-moov-test \
+  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
+export IN=11000 OUT=11001 MET=11040
+
+docker compose -f lab/docker-compose.yml up --build -d
+sleep 15
+curl -sS http://127.0.0.1:11000/pm4ml-tenants
+</code></pre>
+
+        <h3>WAF</h3>
+        <p>Chaque FQDN overlay : <code>proxy_pass http://172.25.2.117:11000;</code> (même port inbound). UI MCM : port agent (<code>10203</code> pour moov-test, pas 11000).</p>
+        <p>Callbacks MCM = origine <code>https://&lt;DFSP_FQDN&gt;</code> (pas d’IP, pas de <code>http://</code>, pas de path <code>/quotes</code>).</p>
+
+        <h3>Tests</h3>
+        <ol class="steps">
+          <li><code>/pm4ml-tenants</code> depuis le nœud : tous les IDs, certs &gt; 0.</li>
+          <li>Inbound : Host FQDN + Destination identique → 202.</li>
+          <li>Outbound : <code>POST http://127.0.0.1:11001/&lt;dfspId&gt;/transfers</code> → COMPLETED si CBS OK.</li>
+        </ol>
+      </section>
+
+      <section id="prerequis" class="section">
+        <h2>Prérequis</h2>
+        <h3>Hub</h3>
+        <ul>
+          <li><code>DFSP_ID</code> unique = Hydra <code>client_id</code> = MCM = ledger = Host.</li>
+          <li>Client Hydra <code>client_credentials</code> + secret.</li>
+          <li>DFSP MCM, zone <code>XOF</code>, participant central-ledger.</li>
+          <li><code>extapi.openmfi.org</code> (mTLS).</li>
+          <li>DNS <code>A</code> : <code>&lt;id&gt;.ext.openmfi.org</code> et <code>mcm-&lt;id&gt;.ext.openmfi.org</code> → WAF <code>41.214.65.90</code>.</li>
+          <li>Vhost nginx 443 + redirect 80. SAN <code>*.ext.openmfi.org</code>.</li>
+        </ul>
+        <h3>CBS</h3>
+        <ul>
+          <li>API joignable <code>host:port/mojaloop</code> (JSON, pas HTML).</li>
+          <li><code>GET /parties</code>, <code>POST /quoterequests</code>, <code>POST /transfers</code>.</li>
+          <li><code>cbs.counterparties</code> pour chaque FSP payer inbound.</li>
+          <li>Paiements initiés : <code>http://172.25.2.117:11001/&lt;dfspId&gt;/transfers</code>.</li>
+        </ul>
+        <h3>Nœud SDK</h3>
+        <ul>
+          <li>Docker + overlay buildable. Ports overlay 11000 / 11001 (déjà alloués).</li>
+          <li>Agent : Vault + <code>mcm-agent-&lt;id&gt;</code>, Status MCM <strong>8/8</strong>, WS <code>4004</code> sur le réseau Docker seulement.</li>
+          <li><code>extra_hosts</code> agent : hydra/mcm → WAF, extapi → <code>172.16.2.28</code>.</li>
+          <li>Ne pas changer CoreDNS / WAF des DFSPs hors overlay (ex. moov prod).</li>
+        </ul>
+      </section>
+
+      <section id="nouveau-dfsp" class="section">
+        <h2>Onboarding — nouveau DFSP</h2>
+        <p>DFSP qui n’a pas encore de stack. On crée l’agent (sans SDK dédié si l’overlay est déjà la cible), puis on le branche.</p>
+        <ol class="steps">
+          <li>Hydra + MCM + participant ledger + DNS vers le WAF.</li>
+          <li>Compose <strong>agent seul</strong> : Vault + mcm-agent, Status 8/8. Pas de couple inbound Hub dédié.</li>
+          <li><code>BACKEND_ENDPOINT=host:port/mojaloop</code> (sans espace, sans <code>http://</code>).</li>
+          <li>CBS : comptes, aliases, counterparties.</li>
+          <li><code>docker inspect mcm-agent-&lt;id&gt;</code> → nom de réseau. L’ajouter dans <code>lab/docker-compose.yml</code> (<code>external: true</code>) et dans <code>MGMT_API_WS_URLS</code> : <code>&lt;id&gt;@mcm-agent-&lt;id&gt;:4004</code>.</li>
+          <li><code>docker compose -f lab/docker-compose.yml up --build -d</code>.</li>
+          <li>WAF FQDN → <code>:11000</code>. Vhost <code>mcm-</code> → port UI agent.</li>
+          <li>MCM callbacks <code>https://&lt;FQDN&gt;</code>.</li>
+          <li><code>GET http://127.0.0.1:11000/pm4ml-tenants</code> contient le nouvel ID.</li>
+        </ol>
+        <div class="warn">Ne pas réutiliser un subnet Docker figé (erreur <code>Pool overlaps</code>). Vault image 1.20.4 : <code>SKIP_SETCAP</code> + <code>disable_mlock</code> + volumes UID 100. <code>default.json</code> doit être du JSON valide (pas un prompt shell collé).</div>
+      </section>
+
+      <section id="dfsp-existant" class="section">
+        <h2>Onboarding — DFSP existant (SDK dédié)</h2>
+        <p>Cutover : le DFSP a déjà Vault + agent + SDK 1:1 (ex. <code>moov-test</code> sur <code>:10200</code>). On arrête <strong>uniquement</strong> le SDK dédié.</p>
+        <div class="note">Ne pas arrêter l’agent, Vault, Redis du DFSP. Ne pas arrêter <code>moov</code> prod (<code>:6000</code>) pour un cutover <code>moov-test</code>.</div>
+        <ol class="steps">
+          <li>Exporter les réseaux Docker de <strong>tous</strong> les agents déjà sur l’overlay <em>plus</em> le nouveau.</li>
+          <li><code>docker update --restart=no sdk-scheme-adapter-&lt;id&gt;</code> puis <code>docker stop</code>.</li>
+          <li>Ajouter WS URL + réseau dans <code>lab/docker-compose.yml</code>.</li>
+          <li><code>docker compose -f lab/docker-compose.yml up --build -d</code>.</li>
+          <li>Vérifier que les tenants précédents sont toujours dans <code>/pm4ml-tenants</code>.</li>
+          <li>WAF : <code>proxy_pass</code> de <code>:&lt;ancien inbound&gt;</code> vers <code>:11000</code>. MCM inchangé.</li>
+          <li>CBS outbound : <code>http://172.25.2.117:11001/&lt;dfspId&gt;/…</code>.</li>
+        </ol>
+        <p>Outage Hub = fenêtre stop SDK dédié → reload WAF.</p>
+        <h3>Retour arrière</h3>
+        <p>WAF vers l’ancien inbound, retirer l’entrée <code>MGMT_API_WS_URLS</code>, <code>docker start sdk-scheme-adapter-&lt;id&gt;</code>.</p>
+      </section>
+
+      <section id="securite" class="section">
+        <h2>Sécurité</h2>
+        <p>Isolation overlay (après durcissement) : tenant inbound = Host ; mismatch Destination → 400 ; outbound sans préfixe → 404 ; <code>/pm4ml-tenants</code> masqué derrière le WAF ; metrics bind localhost.</p>
+        <table>
+          <tr><th>Risque résiduel</th><th>Mesure ops</th></tr>
+          <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code></td><td>Lab seulement ; CA Hub en prod</td></tr>
+          <tr><td>Outbound <code>:11001</code> sans auth applicative</td><td>Firewall : CBS / ops seulement</td></tr>
+          <tr><td>Inbound <code>:11000</code></td><td>WAF seulement, pas Internet brut</td></tr>
+          <tr><td>JWS off (comme stacks 1:1 lab)</td><td>Activer quand tous les pairs signent</td></tr>
+          <tr><td>Un process + Redis pour N DFSPs</td><td>Point unique de défaillance / dump mémoire</td></tr>
+        </table>
+      </section>
+
+      <section id="ports" class="section">
+        <h2>Ports et URL</h2>
+        <table>
+          <tr><th>Rôle</th><th>Adresse</th></tr>
+          <tr><td>Documentation (cette page)</td><td><code>http://172.25.2.117/documentation</code></td></tr>
+          <tr><td>WAF public</td><td><code>41.214.65.90:443</code></td></tr>
+          <tr><td>Hub FSPIOP</td><td><code>extapi.openmfi.org</code> → <code>172.16.2.28</code></td></tr>
+          <tr><td>Overlay inbound</td><td><code>172.25.2.117:11000</code></td></tr>
+          <tr><td>Overlay outbound</td><td><code>172.25.2.117:11001/{dfspId}/</code></td></tr>
+          <tr><td>Overlay metrics</td><td><code>127.0.0.1:11040</code></td></tr>
+          <tr><td>Debug tenants</td><td><code>http://127.0.0.1:11000/pm4ml-tenants</code></td></tr>
+        </table>
+        <h3>Publier cette doc sur la VM</h3>
+<pre><code>cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant/docs-web
+docker compose up -d
+# http://172.25.2.117/documentation
+# Si le port 80 est pris :
+# DOC_PORT=8080 docker compose up -d
+# → http://172.25.2.117:8080/documentation
+</code></pre>
+      </section>
+    </main>
+  </div>
+  <script src="assets/app.js"></script>
+</body>
+</html>
