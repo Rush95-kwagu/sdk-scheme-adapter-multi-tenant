@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SDK multi-tenant — documentation</title>
+  <title>SDK multi-tenant documentation</title>
   <link rel="stylesheet" href="assets/app.css" />
 </head>
 <body>
@@ -41,7 +41,7 @@
           </div>
           <div class="card">
             <h3>Ce que ce n’est pas</h3>
-            <p>Pas une PR Mojaloop, pas le défaut production. Le flag officiel <code>MULTI_DFSP</code> n’est <strong>pas</strong> du multi-tenant PM4ML — voir <a href="#valeur">Mono DFSP vs overlay</a>.</p>
+            <p>Pas une PR Mojaloop, pas le défaut production. Le flag officiel <code>MULTI_DFSP</code> n’est <strong>pas</strong> du multi-tenant PM4ML voir <a href="#valeur">Mono DFSP vs overlay</a>.</p>
           </div>
         </div>
         <p>Lire d’abord <a href="#valeur">la valeur ajoutée</a>, puis le <a href="#deploiement">déploiement générique</a>. Les IPs / FQDN du lab openmfi sont regroupés sous <em>Contexte actuel</em>.</p>
@@ -49,7 +49,7 @@
       </section>
 
       <section id="valeur" class="section">
-        <h2>Mono DFSP vs overlay — valeur ajoutée</h2>
+        <h2>Mono DFSP vs overlay valeur ajoutée</h2>
         <p>Le SDK <strong>officiel</strong> (image <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>, sans overlay) est conçu pour <strong>un</strong> DFSP par processus. Deux flags distincts existent ; les mélanger est la principale source de confusion.</p>
 
         <h3>Les trois modes à ne pas confondre</h3>
@@ -75,7 +75,7 @@
           <tr>
             <td>NOTIFY agent</td>
             <td><code>restart()</code> inbound + outbound</td>
-            <td>Idem — restart global</td>
+            <td>Idem restart global</td>
             <td>Upsert mémoire, <strong>pas</strong> de restart</td>
           </tr>
           <tr>
@@ -126,7 +126,7 @@
 
         <h3>Quand rester en SDK dédié</h3>
         <ul class="check">
-          <li>DFSP prod sensible (lab : <code>moov</code> sur <code>:6000</code>) — hors overlay tant que le cutover n’est pas validé.</li>
+          <li>DFSP prod sensible (lab : <code>moov</code> sur <code>:6000</code>) hors overlay tant que le cutover n’est pas validé.</li>
           <li>Besoin d’isoler la panne : un crash SDK overlay touche N caisses.</li>
           <li>CBS / WAF pas encore prêts pour le préfixe outbound <code>/{dfspId}/</code>.</li>
         </ul>
@@ -134,7 +134,7 @@
 
       <section id="fonctionnement" class="section">
         <h2>Fonctionnement</h2>
-        <p>Le SDK officiel n’a qu’un websocket PM4ML. Un <code>CONFIGURATION.NOTIFY</code> déclenche un <code>restart()</code> global — incompatible avec N DFSPs dans le même process.</p>
+        <p>Le SDK officiel n’a qu’un websocket PM4ML. Un <code>CONFIGURATION.NOTIFY</code> déclenche un <code>restart()</code> global incompatible avec N DFSPs dans le même process.</p>
         <p>L’overlay (<code>PM4ML_MULTI_TENANT=true</code>) ouvre N websockets (<code>MGMT_API_WS_URLS</code>), range chaque conf dans <code>DfspConfigStore</code> <strong>sans</strong> redémarrer HTTP, et applique le slice (certs mTLS, JWS, <code>backendEndpoint</code>) <strong>par requête</strong>.</p>
 
         <h3>Avant / après</h3>
@@ -191,13 +191,13 @@
         <h2>Fonctionnalités</h2>
         <table>
           <tr><th>Fonction</th><th>Détail</th></tr>
-          <tr><td>N ControlAgent</td><td><code>MGMT_API_WS_URLS=id@host:4004,...</code> — ancre <code>id@</code> si le NOTIFY omet <code>dfspId</code></td></tr>
+          <tr><td>N ControlAgent</td><td><code>MGMT_API_WS_URLS=id@host:4004,...</code> ancre <code>id@</code> si le NOTIFY omet <code>dfspId</code></td></tr>
           <tr><td>Upsert sans restart</td><td>Un NOTIFY d’un tenant ne coupe pas les autres</td></tr>
           <tr><td>TLS / JWS par tenant</td><td>Cert client Hub et clé JWS du slice</td></tr>
           <tr><td>Backend par tenant</td><td>NOTIFY agent écrase le fallback Compose</td></tr>
           <tr><td>Wrap lookup</td><td>Complète <code>partyIdType</code> / <code>partyIdentifier</code> si le CBS omet les ids (évite 3102)</td></tr>
           <tr><td><code>GET /pm4ml-tenants</code></td><td>Debug depuis le nœud (<code>127.0.0.1:&lt;IN&gt;</code>). 404 via le WAF (en-têtes <code>X-Forwarded-*</code>)</td></tr>
-          <tr><td>POC isolé</td><td><code>poc/</code> — 2 mock-agents, sans Hub</td></tr>
+          <tr><td>POC isolé</td><td><code>poc/</code> 2 mock-agents, sans Hub</td></tr>
         </table>
         <h3>Partagé vs 1:1</h3>
         <table>
@@ -301,7 +301,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://&lt;DFSP_FQDN&gt;/ping
 </code></pre>
 
         <div class="ctx">
-          <strong>Contexte actuel — lab openmfi (exemple, pas un gabarit universel)</strong>
+          <strong>Contexte actuel lab openmfi (exemple, pas un gabarit universel)</strong>
           <p>Nœud SDK <code>172.25.2.117</code> · WAF <code>41.214.65.90</code> · Hub FSPIOP <code>extapi.openmfi.org</code> → <code>172.16.2.28</code> · suffixe <code>.ext.openmfi.org</code>.</p>
           <p>Tenants overlay : <code>cmcalavi</code>, <code>gto</code>, <code>moov-test</code>. <code>moov</code> prod (<code>:6000</code>) <strong>hors</strong> overlay.</p>
           <p>Ports overlay : inbound <code>11000</code>, outbound <code>11001</code>, metrics <code>127.0.0.1:11040</code>.</p>
@@ -325,7 +325,7 @@ curl -sS http://127.0.0.1:11000/pm4ml-tenants
 
       <section id="prerequis" class="section">
         <h2>Prérequis</h2>
-        <p>Périmètre <strong>from scratch</strong> : on suppose qu’aucun outil n’est encore installé sur le nœud, et que le DFSP n’existe pas encore au Hub. Si le switch Mojaloop n’existe pas du tout, son déploiement (ALS, quoting, ledger, MCM, Hydra) est un projet distinct — listé ici comme dépendance, pas comme procédure overlay.</p>
+        <p>Périmètre <strong>from scratch</strong> : on suppose qu’aucun outil n’est encore installé sur le nœud, et que le DFSP n’existe pas encore au Hub. Si le switch Mojaloop n’existe pas du tout, son déploiement (ALS, quoting, ledger, MCM, Hydra) est un projet distinct listé ici comme dépendance, pas comme procédure overlay.</p>
 
         <h3>A. Nœud Linux (rien d’installé)</h3>
         <ul class="check">
@@ -362,7 +362,7 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
   -d 'grant_type=client_credentials' \
   -d 'client_id=&lt;DFSP_ID&gt;' \
   -d 'client_secret=&lt;SECRET&gt;'
-# JSON access_token — pas une page HTML Envoy
+# JSON access_token pas une page HTML Envoy
 </code></pre>
 
         <h3>C. DNS + WAF TLS (rien de configuré pour ce DFSP)</h3>
@@ -381,10 +381,10 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
           <li>Sans <code>http://</code> dans <code>BACKEND_ENDPOINT</code>, sans espace.</li>
         </ul>
 <pre><code>wget -qO- "http://&lt;CBS_HOST&gt;:&lt;PORT&gt;/mojaloop/parties/ALIAS/&lt;id-test&gt;"
-# JSON attendu — un dump HTML = mauvais host (SPA Granian)
+# JSON attendu un dump HTML = mauvais host (SPA Granian)
 </code></pre>
 
-        <h3>E. Identité DFSP (à créer — voir onboarding)</h3>
+        <h3>E. Identité DFSP (à créer voir onboarding)</h3>
         <ul class="check">
           <li><code>DFSP_ID</code> unique = Hydra <code>client_id</code> = MCM = ledger = label Host (casse exacte).</li>
           <li>Secret Hydra → uniquement le <code>.env</code> de <em>cet</em> agent (jamais le shell exporté d’un autre DFSP).</li>
@@ -400,13 +400,13 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
         </ul>
 
         <div class="ctx">
-          <strong>Contexte actuel — lab openmfi</strong>
+          <strong>Contexte actuel lab openmfi</strong>
           WAF <code>41.214.65.90</code> · gw-ext Hydra/MCM <code>172.16.2.26</code> · extapi <code>172.16.2.28</code> · SDK <code>172.25.2.117</code> · OpenCBS exemple <code>172.16.2.16:8100/mojaloop</code>. extra_hosts agent : hydra/mcm → WAF, extapi → <code>.28</code>. Overlay déjà <code>11000</code>/<code>11001</code>.
         </div>
       </section>
 
       <section id="nouveau-dfsp" class="section">
-        <h2>Onboarding — nouveau DFSP</h2>
+        <h2>Onboarding nouveau DFSP</h2>
         <p>DFSP qui n’a <strong>aucune</strong> stack. On crée l’identité Hub, on démarre <strong>Vault + mcm-agent</strong> (sans SDK dédié si l’overlay est la cible), puis on branche le websocket sur le SDK partagé.</p>
         <p>Remplacer partout <code>&lt;DFSP_ID&gt;</code> (minuscules, ex. <code>acme</code>).</p>
 <pre><code>export DFSP_ID=acme
@@ -418,7 +418,7 @@ export CBS_BACKEND=172.16.2.16:8100/mojaloop
 export DEPLOY=~/dfsp-${DFSP_ID}-mojaloop/sdk-scheme-adapter/deploy
 </code></pre>
 
-        <h3>1. Hub — client Hydra + MCM + ledger</h3>
+        <h3>1. Hub client Hydra + MCM + ledger</h3>
         <ol class="steps">
           <li>Créer un client Hydra <code>client_credentials</code>, <code>client_id=&lt;DFSP_ID&gt;</code>, <code>token_endpoint_auth_method=client_secret_post</code>. Noter le secret.</li>
           <li>MCM UI (ou <code>POST /api/dfsps</code> token hub) : <code>{"dfspId":"&lt;DFSP_ID&gt;","name":"…","monetaryZoneId":"XOF"}</code>.</li>
@@ -453,7 +453,7 @@ EOF
 
 chmod +x "${DEPLOY}/manage.sh" "${DEPLOY}/scripts/vault-init.sh"
 </code></pre>
-        <p><code>config/mcm-agent/default.json</code> — points non négociables : <code>tokenPath</code> <code>/oauth2/token</code>, <code>tokenEndpoint</code> Hydra, endpoints Hub <strong>sans</strong> <code>:443</code>, <code>sdk.fqdn</code> / <code>callbackUrl</code> = <code>https://${DFSP_FQDN}</code>. JSON valide (pas un prompt collé).</p>
+        <p><code>config/mcm-agent/default.json</code> points non négociables : <code>tokenPath</code> <code>/oauth2/token</code>, <code>tokenEndpoint</code> Hydra, endpoints Hub <strong>sans</strong> <code>:443</code>, <code>sdk.fqdn</code> / <code>callbackUrl</code> = <code>https://${DFSP_FQDN}</code>. JSON valide (pas un prompt collé).</p>
         <p>Compose : <code>user: "100:100"</code> sur vault/vault-init, <code>SKIP_SETCAP=true</code>, <code>disable_mlock</code>, volumes UID 100, <code>container_name: mcm-agent-${DFSP_ID}</code>, <code>expose: ["4004"]</code> (pas de <code>ports:</code> public 4004), extra_hosts hydra/mcm → WAF, extapi → IP Hub FSPIOP. <strong>Ne pas</strong> figer un subnet IPAM (erreur <code>Pool overlaps</code>).</p>
         <p>Cible overlay : <strong>ne pas démarrer</strong> le service <code>sdk-scheme-adapter</code>.</p>
 <pre><code>cd "$DEPLOY"
@@ -487,8 +487,8 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
           <li>Peer JWS / Hub CA déjà hub-wide.</li>
         </ul>
 
-        <h3>5. WAF — UI agent + FQDN FSPIOP</h3>
-        <p>FSPIOP : <code>proxy_pass http://${SDK_HOST}:${IN};</code> (overlay, ex. 11000) — <strong>pas</strong> un nouveau port inbound SDK. MCM UI : <code>proxy_pass http://${SDK_HOST}:${MCM_UI_PORT};</code>.</p>
+        <h3>5. WAF UI agent + FQDN FSPIOP</h3>
+        <p>FSPIOP : <code>proxy_pass http://${SDK_HOST}:${IN};</code> (overlay, ex. 11000) <strong>pas</strong> un nouveau port inbound SDK. MCM UI : <code>proxy_pass http://${SDK_HOST}:${MCM_UI_PORT};</code>.</p>
         <p>Ajouter les deux FQDN au <code>server_name</code> HTTP:80 (301 https). <code>nginx -t &amp;&amp; systemctl reload nginx</code>.</p>
         <p>MCM : tous les callbacks = <code>https://${DFSP_FQDN}</code>.</p>
 
@@ -543,7 +543,7 @@ curl -sS -o /tmp/in.json -w "HTTP %{http_code}\n" \
       </section>
 
       <section id="dfsp-existant" class="section">
-        <h2>Onboarding — DFSP existant (SDK dédié)</h2>
+        <h2>Onboarding DFSP existant (SDK dédié)</h2>
         <p>Cutover : le DFSP a déjà Vault + agent + SDK 1:1. On arrête <strong>uniquement</strong> le SDK dédié, on attache l’agent à l’overlay, on bascule le WAF.</p>
         <div class="note">Ne pas arrêter l’agent, Vault, Redis du DFSP. Ne pas toucher les autres SDK (ex. ne pas arrêter <code>moov</code> prod pour un cutover <code>moov-test</code>).</div>
 
@@ -623,7 +623,7 @@ nginx -t &amp;&amp; systemctl reload nginx
 curl -sS -o /dev/null -w "%{http_code}\n" https://${DFSP_FQDN}/ping
 # 405
 </code></pre>
-        <p>Vhost <code>mcm-${DFSP_ID}</code> : inchangé. Callbacks MCM : déjà <code>https://${DFSP_FQDN}</code> — ne pas les pointer vers l’IP overlay.</p>
+        <p>Vhost <code>mcm-${DFSP_ID}</code> : inchangé. Callbacks MCM : déjà <code>https://${DFSP_FQDN}</code> ne pas les pointer vers l’IP overlay.</p>
 
         <h3>6. CBS outbound</h3>
         <p>Remplacer <code>http://${SDK_HOST}:&lt;PORT_OUTBOUND_ANCIEN&gt;/transfers</code> par :</p>
@@ -650,7 +650,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         <p>Agent / Vault restent up pendant tout le cutover et le rollback.</p>
 
         <div class="ctx">
-          <strong>Contexte actuel — exemple moov-test</strong>
+          <strong>Contexte actuel exemple moov-test</strong>
           Ancien inbound <code>:10200</code>, outbound <code>:10201</code>, MCM UI <code>:10203</code>. Overlay <code>:11000</code>/<code>:11001</code>. Ne pas toucher <code>sdk-scheme-adapter-moov</code> (<code>:6000</code>) ni CoreDNS moov. Alias ALS <code>0195920986</code> résout <strong>moov</strong> prod, pas moov-test.
         </div>
       </section>
@@ -672,7 +672,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         <h2>Ports et URL</h2>
         <p>Générique : inbound overlay <code>&lt;SDK_HOST&gt;:&lt;IN&gt;</code>, outbound <code>&lt;SDK_HOST&gt;:&lt;OUT&gt;/{dfspId}/</code>, debug <code>http://127.0.0.1:&lt;IN&gt;/pm4ml-tenants</code>.</p>
         <div class="ctx">
-          <strong>Contexte actuel — lab openmfi</strong>
+          <strong>Contexte actuel lab openmfi</strong>
         </div>
         <table>
           <tr><th>Rôle</th><th>Adresse</th></tr>
