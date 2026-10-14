@@ -126,21 +126,14 @@ const handleRequestSimpleTransfersInformationError = (method, err, ctx) =>
 const createOutboundTransfersModel = (ctx) => {
     const dfspConfigStore = require('../lib/DfspConfigStore');
     const dfspId = ctx.state.pm4mlDfspId
-        || ctx.state.path?.params?.dfspId
-        || ctx.state.conf.dfspId;
-    const conf = (dfspId && dfspConfigStore.has(dfspId))
-        ? dfspConfigStore.applyTo(ctx.state.conf, dfspId)
-        : ctx.state.conf;
-    const creds = conf.outbound && conf.outbound.tls && conf.outbound.tls.creds;
-    const cert = creds && creds.cert;
-    const key = creds && creds.key;
+        || ctx.state.path?.params?.dfspId;
+    if (!dfspId || !dfspConfigStore.has(dfspId)) {
+        throw new Error('unknown DFSP tenant');
+    }
+    const conf = dfspConfigStore.applyTo(ctx.state.conf, dfspId);
     ctx.state.logger.info('outbound model tls', {
         dfspId,
         tlsEnabled: Boolean(conf.outbound && conf.outbound.tls && conf.outbound.tls.mutualTLS && conf.outbound.tls.mutualTLS.enabled),
-        certHead: typeof cert === 'string' ? cert.slice(0, 27) : (cert ? typeof cert : null),
-        keyHead: typeof key === 'string' ? key.slice(0, 31) : (key ? typeof key : null),
-        certBytes: typeof cert === 'string' ? cert.length : null,
-        keyBytes: typeof key === 'string' ? key.length : null,
     });
     return new OutboundTransfersModel({
         ...conf,

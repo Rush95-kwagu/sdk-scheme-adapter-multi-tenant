@@ -424,26 +424,27 @@ const applyState = (sharedState) => async (ctx, next) => {
     await next();
 };
 
-const resolveDfspId = (conf, ctx) => {
-    if (ctx.state.pm4mlDfspId) return ctx.state.pm4mlDfspId;
-    const fromPath = ctx.state.path?.params?.dfspId;
-    if (fromPath) return fromPath;
-    const dest = ctx.request.headers['fspiop-destination'];
-    if (dest && dfspConfigStore.has(dest)) return dest;
-    const segs = (ctx.path || '').split('/').filter(Boolean);
-    if (segs[0] && dfspConfigStore.has(segs[0])) return segs[0];
+const dfspIdFromHostHeader = (conf, ctx) => {
     const host = (ctx.request.headers.host || '').split(':')[0].toLowerCase();
     const suffix = (conf.dfspHostSuffix || '').toLowerCase();
-    if (suffix && host.endsWith(suffix.toLowerCase())) {
-        const id = host.slice(0, host.length - suffix.length);
-        if (id) return id;
+    let id;
+    if (suffix && host.endsWith(suffix)) {
+        id = host.slice(0, host.length - suffix.length);
+    } else if (host) {
+        id = host.split('.')[0];
     }
-    if (dest) return dest;
-    const first = host.split('.')[0];
-    if (first && dfspConfigStore.has(first)) return first;
-    const ids = dfspConfigStore.list();
-    if (ids.length === 1) return ids[0];
+    if (id && dfspConfigStore.has(id)) return id;
     return undefined;
+};
+
+const rejectUnknownTenant = (ctx, message) => {
+    ctx.status = 400;
+    ctx.body = {
+        errorInformation: {
+            errorCode: '3100',
+            errorDescription: message,
+        },
+    };
 };
 
 const stripPm4mlOutboundPrefix = (conf) => async (ctx, next) => {
@@ -467,26 +468,32 @@ const applyPm4mlTenant = (conf) => async (ctx, next) => {
     if (!conf?.pm4mlMultiTenant) {
         return next();
     }
-    const dfspId = resolveDfspId(conf, ctx);
-    if (dfspId) {
-        ctx.state.path = ctx.state.path || { params: {} };
-        ctx.state.path.params = { ...ctx.state.path.params, dfspId };
-        ctx.state.pm4mlDfspId = dfspId;
-        if (dfspConfigStore.has(dfspId)) {
-            ctx.state.conf = dfspConfigStore.applyTo(ctx.state.conf, dfspId);
-            const creds = ctx.state.conf.outbound && ctx.state.conf.outbound.tls && ctx.state.conf.outbound.tls.creds;
-            const cert = creds && creds.cert;
-            const key = creds && creds.key;
-            ctx.state.logger.info('resolved PM4ML tenant', {
-                dfspId,
-                backendEndpoint: ctx.state.conf.backendEndpoint,
-                tlsEnabled: Boolean(ctx.state.conf.outbound && ctx.state.conf.outbound.tls && ctx.state.conf.outbound.tls.mutualTLS && ctx.state.conf.outbound.tls.mutualTLS.enabled),
-                credsKeys: creds ? Object.keys(creds) : [],
-                certBytes: typeof cert === 'string' ? cert.length : (Buffer.isBuffer(cert) ? cert.length : null),
-                keyBytes: typeof key === 'string' ? key.length : (Buffer.isBuffer(key) ? key.length : null),
-            });
+    const fromPath = ctx.state.pm4mlDfspId;
+    if (fromPath) {
+        if (!dfspConfigStore.has(fromPath)) {
+            ctx.status = 404;
+            ctx.body = { statusCode: 404, message: 'unknown DFSP prefix' };
+            return;
         }
+        ctx.state.conf = dfspConfigStore.applyTo(ctx.state.conf, fromPath);
+        ctx.state.logger.info('resolved PM4ML tenant', { dfspId: fromPath });
+        await next();
+        return;
     }
+
+    const hostId = dfspIdFromHostHeader(conf, ctx);
+    const dest = ctx.request.headers['fspiop-destination'];
+    if (!hostId) {
+        return rejectUnknownTenant(ctx, 'unknown or missing DFSP Host');
+    }
+    if (dest && dest !== hostId) {
+        return rejectUnknownTenant(ctx, 'FSPIOP-Destination does not match Host tenant');
+    }
+    ctx.state.path = ctx.state.path || { params: {} };
+    ctx.state.path.params = { ...ctx.state.path.params, dfspId: hostId };
+    ctx.state.pm4mlDfspId = hostId;
+    ctx.state.conf = dfspConfigStore.applyTo(ctx.state.conf, hostId);
+    ctx.state.logger.info('resolved PM4ML tenant', { dfspId: hostId });
     await next();
 };
 

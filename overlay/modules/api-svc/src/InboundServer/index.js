@@ -128,6 +128,14 @@ class InboundApi extends EventEmitter {
         api.use(middlewares.applyState({ conf, cache, wso2, logExcludePaths: [...logExcludePaths, '/pm4ml-tenants'] }));
         api.use(async (ctx, next) => {
             if (conf.pm4mlMultiTenant && ctx.method === 'GET' && ctx.path === '/pm4ml-tenants') {
+                const forwarded = ctx.request.headers['x-forwarded-for']
+                    || ctx.request.headers['x-real-ip']
+                    || ctx.request.headers['x-forwarded-host'];
+                if (forwarded) {
+                    ctx.status = 404;
+                    ctx.body = '';
+                    return;
+                }
                 const dfspConfigStore = require('../lib/DfspConfigStore');
                 ctx.body = {
                     tenants: dfspConfigStore.list(),
@@ -137,10 +145,9 @@ class InboundApi extends EventEmitter {
                         const key = t && t.outboundTls && t.outboundTls.creds && t.outboundTls.creds.key;
                         return {
                             dfspId: id,
-                            backendEndpoint: t && t.backendEndpoint,
+                            backendConfigured: Boolean(t && t.backendEndpoint),
                             outboundCertBytes: typeof cert === 'string' ? cert.length : null,
                             outboundKeyBytes: typeof key === 'string' ? key.length : null,
-                            certHead: typeof cert === 'string' ? cert.slice(0, 27) : null,
                         };
                     }),
                 };

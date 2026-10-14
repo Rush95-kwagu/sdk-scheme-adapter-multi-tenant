@@ -92,6 +92,14 @@ class OutboundApi extends EventEmitter {
         }
 
         this._api.use(inboundMiddlewares.stripPm4mlOutboundPrefix(conf));
+        this._api.use(async (ctx, next) => {
+            if (conf.pm4mlMultiTenant && !ctx.state.pm4mlDfspId) {
+                ctx.status = 404;
+                ctx.body = { statusCode: 404, message: 'DFSP path prefix required, e.g. /{dfspId}/transfers' };
+                return;
+            }
+            await next();
+        });
         this._api.use(middlewares.createRequestValidator(validator));
         this._api.use(inboundMiddlewares.applyPm4mlTenant(conf));
         this._api.use(router(handlers, {
