@@ -3,48 +3,77 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#1c1915" />
   <title>openmfi — Hub, SDK 1:1, overlay</title>
   <link rel="stylesheet" href="assets/app.css" />
 </head>
 <body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
   <div class="layout">
-    <nav class="side">
+    <div class="backdrop" id="backdrop"></div>
+    <nav class="side" id="nav" aria-label="Sommaire">
       <div class="brand">
-        <h1>openmfi · toolkit</h1>
+        <h1>openmfi</h1>
         <p>Hub · SDK 1:1 · overlay</p>
       </div>
-      <div class="group">Vue d’ensemble</div>
-      <a class="item" href="#accueil">Accueil</a>
-      <a class="item" href="#valeur">Mono DFSP vs overlay</a>
-      <div class="group">Hub Mojaloop</div>
-      <a class="item" href="#hub">Architecture ml-cc</a>
-      <a class="item" href="#hub-net">Réseau, DHCP, NAT</a>
-      <a class="item" href="#hub-prereq">Prérequis et Proxmox</a>
-      <a class="item" href="#hub-env">Environnements</a>
-      <a class="item" href="#hub-deploy">Déploiement Flux</a>
-      <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
-      <div class="group">SDK 1:1 (toolkit)</div>
-      <a class="item" href="#mono">Architecture 1:1</a>
-      <a class="item" href="#mono-prerequis">Prérequis 1:1</a>
-      <a class="item" href="#mono-deploy">Déploiement Compose</a>
-      <a class="item" href="#mono-config">Configuration</a>
-      <a class="item" href="#mono-waf">WAF, MCM, tests</a>
-      <a class="item" href="#mono-helm">Chart Helm</a>
-      <div class="group">SDK overlay</div>
-      <a class="item" href="#fonctionnement">Fonctionnement</a>
-      <a class="item" href="#fonctionnalites">Fonctionnalités</a>
-      <a class="item" href="#deploiement">Déploiement overlay</a>
-      <a class="item" href="#prerequis">Prérequis overlay</a>
-      <a class="item" href="#nouveau-dfsp">Nouveau DFSP → overlay</a>
-      <a class="item" href="#dfsp-existant">Cutover SDK dédié</a>
-      <div class="group">Référence</div>
-      <a class="item" href="#securite">Sécurité</a>
-      <a class="item" href="#ports">Ports et URL</a>
+      <label class="search">
+        <input id="doc-search" type="search" placeholder="Rechercher une page…" autocomplete="off" />
+        <kbd>/</kbd>
+      </label>
+      <div class="nav-scroll">
+        <details class="nav-group" open>
+          <summary>Vue d’ensemble</summary>
+          <a class="item" href="#accueil">Accueil</a>
+          <a class="item" href="#valeur">Mono DFSP vs overlay</a>
+        </details>
+        <details class="nav-group" open>
+          <summary>Hub Mojaloop</summary>
+          <a class="item" href="#hub">Architecture ml-cc</a>
+          <a class="item" href="#hub-net">Réseau, DHCP, NAT</a>
+          <a class="item" href="#hub-prereq">Prérequis et Proxmox</a>
+          <a class="item" href="#hub-env">Environnements</a>
+          <a class="item" href="#hub-deploy">Déploiement Flux</a>
+          <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
+        </details>
+        <details class="nav-group" open>
+          <summary>SDK 1:1</summary>
+          <a class="item" href="#mono">Architecture 1:1</a>
+          <a class="item" href="#mono-prerequis">Prérequis 1:1</a>
+          <a class="item" href="#mono-deploy">Déploiement Compose</a>
+          <a class="item" href="#mono-config">Configuration</a>
+          <a class="item" href="#mono-waf">WAF, MCM, tests</a>
+          <a class="item" href="#mono-helm">Chart Helm</a>
+        </details>
+        <details class="nav-group" open>
+          <summary>SDK overlay</summary>
+          <a class="item" href="#fonctionnement">Fonctionnement</a>
+          <a class="item" href="#fonctionnalites">Fonctionnalités</a>
+          <a class="item" href="#deploiement">Déploiement overlay</a>
+          <a class="item" href="#prerequis">Prérequis overlay</a>
+          <a class="item" href="#nouveau-dfsp">Nouveau DFSP → overlay</a>
+          <a class="item" href="#dfsp-existant">Cutover SDK dédié</a>
+        </details>
+        <details class="nav-group" open>
+          <summary>Référence</summary>
+          <a class="item" href="#securite">Sécurité</a>
+          <a class="item" href="#ports">Ports et URL</a>
+        </details>
+        <p class="nav-empty" id="nav-empty">Aucune page ne correspond.</p>
+      </div>
     </nav>
 
-    <main>
+    <div class="workspace">
+      <header class="pagehead">
+        <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav">Menu</button>
+        <p class="crumb" id="crumb">Documentation</p>
+      </header>
+      <main class="prose" id="contenu">
       <section id="accueil" class="section">
-        <p><span class="badge">hub ml-cc</span><span class="badge">toolkit 1:1</span><span class="badge">overlay</span></p>
+        <div class="badges">
+          <span class="badge">hub ml-cc</span>
+          <span class="badge">toolkit 1:1</span>
+          <span class="badge">overlay</span>
+        </div>
         <h2>Switch, SDK 1:1 et overlay</h2>
         <p class="lead">Trois couches : le <strong>Hub</strong> (Control Center / cluster de test IaC), le <strong>SDK mono-tenant</strong> du toolkit, l’<strong>overlay multi-tenant</strong>. Les IPs lab sont sous <em>Contexte actuel</em>.</p>
         <div class="cards three">
@@ -1393,7 +1422,9 @@ docker compose up -d
 # DOC_PORT=8080 docker compose up -d
 </code></pre>
       </section>
-    </main>
+      </main>
+      <nav class="pager" id="pager" aria-label="Pagination"></nav>
+    </div>
   </div>
   <script src="assets/app.js"></script>
 </body>
