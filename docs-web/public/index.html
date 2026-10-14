@@ -87,7 +87,7 @@
           </div>
           <div class="card">
             <h3>Overlay (opt-in)</h3>
-            <p>Un SDK, N agents. Flag <code>PM4ML_MULTI_TENANT</code> — pas <code>MULTI_DFSP</code>. Voir <a href="#valeur">Mono vs overlay</a>.</p>
+            <p>Conteneur <code>sdk-fececam</code>, image <code>sdk-scheme-adapter-multi-dfsp</code>. Un process, N agents. Build : <code>just build</code>. Voir <a href="#valeur">Mono vs overlay</a>.</p>
           </div>
         </div>
         <div class="note">URLs : <strong>https://docs.ext.openmfi.org/documentation</strong> (WAF) · <code>http://172.25.2.117/documentation</code> (VM, LAN).</div>
@@ -473,7 +473,7 @@ securityContext:
           <tr><td>NOTIFY d’un DFSP redémarre tout le HTTP du process</td><td>Un NOTIFY <code>gto</code> n’interrompt pas <code>cmcalavi</code></td></tr>
           <tr><td>Impossible de servir 2 mcm-agents (certs / Host)</td><td><code>DfspConfigStore</code> : PEM, JWS, backend <em>par requête</em></td></tr>
           <tr><td>WAF : un <code>proxy_pass</code> par port SDK</td><td>Tous les FQDN overlay → le <strong>même</strong> inbound</td></tr>
-          <tr><td>Cutover = nouvelle VM ou nouveau couple de ports</td><td>Brancher un agent existant : WS + réseau Docker + WAF</td></tr>
+          <tr><td>Cutover = nouvelle VM ou nouveau couple de ports</td><td>Agent running + <code>just build</code> + WAF vers <code>sdk-fececam</code></td></tr>
         </table>
         <p>Ce qui <strong>reste 1:1</strong> (volontairement) : mcm-agent, Vault, client Hydra, FQDN, certs, backend CBS, vhost WAF, UI MCM. L’overlay ne fusionne pas les identités Hub.</p>
 
@@ -922,72 +922,63 @@ kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-sdk-internal 4040:4040
           <tr><td>Backend par tenant</td><td>NOTIFY agent écrase le fallback Compose</td></tr>
           <tr><td>Wrap lookup</td><td>Complète <code>partyIdType</code> / <code>partyIdentifier</code> si le CBS omet les ids (évite 3102)</td></tr>
           <tr><td><code>GET /pm4ml-tenants</code></td><td>Debug depuis le nœud (<code>127.0.0.1:&lt;IN&gt;</code>). 404 via le WAF (en-têtes <code>X-Forwarded-*</code>)</td></tr>
+          <tr><td>Réponse outbound compacte</td><td><code>ok</code>, <code>currentState</code>, <code>transferId</code>, payer/payee, montant, <code>fulfilState</code> — pas d’ILP, headers Hub, ni <code>httpsAgent</code>. Dump : <code>X-SDK-Verbose: 1</code></td></tr>
+          <tr><td>Clé API outbound</td><td><code>OUTBOUND_API_KEY_ENABLED</code> + <code>OUTBOUND_API_KEY</code>. Header <code>X-API-Key</code> ou <code>Authorization: Bearer</code></td></tr>
+          <tr><td><code>just build</code></td><td>Découvre les <code>mcm-agent-*</code> running, génère <code>lab/.env.tenants</code> + <code>lab/compose.tenants.yml</code>, rebuild <code>sdk-fececam</code></td></tr>
           <tr><td>POC isolé</td><td><code>poc/</code> 2 mock-agents, sans Hub</td></tr>
         </table>
         <h3>Partagé vs 1:1</h3>
         <table>
           <tr><th>Partagé</th><th>Un par DFSP</th></tr>
-          <tr><td>Processus SDK overlay, Redis overlay, ports inbound / outbound overlay</td><td>mcm-agent, Vault, Hydra, FQDN, certs, backend CBS, vhost WAF, UI MCM</td></tr>
+          <tr><td>Conteneur <code>sdk-fececam</code>, Redis overlay, réseau Docker <code>sdk-fececam</code>, ports inbound / outbound</td><td>mcm-agent, Vault, Hydra, FQDN, certs, backend CBS, vhost WAF, UI MCM</td></tr>
         </table>
       </section>
 
       <section id="deploiement" class="section">
         <h2>Guide de déploiement overlay</h2>
         <p>Procédure <strong>générique</strong> (placeholders). Les IPs / tenants du lab openmfi sont en bas, rubrique <em>Contexte actuel</em>. Pour un DFSP neuf en 1:1, commencer par <a href="#mono-deploy">Déploiement Compose</a>.</p>
-        <p>Image : <code>FROM mojaloop/sdk-scheme-adapter:v24.9.0</code> + copie <code>overlay/modules/api-svc/src/</code>. Compose overlay : Redis + SDK. Les agents restent dans leurs stacks.</p>
+        <p>Image : <code>sdk-scheme-adapter-multi-dfsp</code> (<code>FROM mojaloop/sdk-scheme-adapter:v24.9.0</code> + overlay). Conteneur et réseau Docker : <code>sdk-fececam</code>. Les agents restent dans leurs stacks.</p>
 
-        <h3>1. Inventaire à figer (une fois par nœud overlay)</h3>
+        <h3>1. Fichier <code>lab/.env</code></h3>
+        <p>Copier <code>lab/.env.example</code> → <code>lab/.env</code> (non versionné). <code>just build</code> le crée s’il manque.</p>
         <table>
           <tr><th>Variable</th><th>Rôle</th></tr>
-          <tr><td><code>SDK_HOST</code></td><td>IP LAN du nœud Docker (WAF → inbound, CBS → outbound)</td></tr>
           <tr><td><code>IN</code> / <code>OUT</code> / <code>MET</code></td><td>Ports hôte overlay (un couple pour tous les tenants)</td></tr>
-          <tr><td><code>DFSP_HOST_SUFFIX</code></td><td>Suffixe Host inbound (ex. <code>.ext.openmfi.org</code>)</td></tr>
-          <tr><td><code>PEER_ENDPOINT</code></td><td>FQDN Hub FSPIOP (mTLS)</td></tr>
-          <tr><td><code>MGMT_API_WS_URLS</code></td><td><code>&lt;id&gt;@mcm-agent-&lt;id&gt;:4004,...</code></td></tr>
-          <tr><td><code>DFSP_ID</code> du SDK</td><td>Toujours <code>placeholder</code> (jamais un vrai ID)</td></tr>
-          <tr><td><code>BACKEND_ENDPOINT</code> du SDK</td><td>Fallback seulement ; la vérité vient du NOTIFY agent</td></tr>
+          <tr><td><code>OUTBOUND_COMPACT_RESPONSE</code></td><td><code>true</code> (défaut) : JSON CBS résumé</td></tr>
+          <tr><td><code>OUTBOUND_API_KEY_ENABLED</code></td><td><code>false</code> = pas de contrôle ; <code>true</code> = header <code>X-API-Key</code> obligatoire</td></tr>
+          <tr><td><code>OUTBOUND_API_KEY</code></td><td>Secret (ignoré si ENABLED=false). Si ENABLED=true et vide → 503</td></tr>
+          <tr><td><code>MGMT_API_WS_URLS</code></td><td><strong>Généré</strong> par <code>just build</code> dans <code>lab/.env.tenants</code> (ne pas éditer à la main)</td></tr>
+          <tr><td><code>DFSP_HOST_SUFFIX</code></td><td>Lab : figé dans Compose (<code>.ext.openmfi.org</code>)</td></tr>
+          <tr><td><code>DFSP_ID</code> du SDK</td><td>Toujours <code>placeholder</code></td></tr>
         </table>
 
-        <h3>2. Variables SDK overlay (génériques)</h3>
-<pre><code>PM4ML_ENABLED=true
-PM4ML_MULTI_TENANT=true
-DFSP_HOST_SUFFIX=.ext.example.org
-MGMT_API_WS_URLS=&lt;idA&gt;@mcm-agent-&lt;idA&gt;:4004,&lt;idB&gt;@mcm-agent-&lt;idB&gt;:4004
-DFSP_ID=placeholder
-CACHE_URL=redis://redis:6379
-PEER_ENDPOINT=extapi.example.org
-ALS_ENDPOINT=extapi.example.org
-QUOTES_ENDPOINT=extapi.example.org
-TRANSFERS_ENDPOINT=extapi.example.org
-BACKEND_ENDPOINT=127.0.0.1:9
-INBOUND_LISTEN_PORT=5000
-OUTBOUND_LISTEN_PORT=5001
-INBOUND_MUTUAL_TLS_ENABLED=false
-OUTBOUND_MUTUAL_TLS_ENABLED=true
-ENABLE_BACKEND_EVENT_HANDLER=false
-ENABLE_FSPIOP_EVENT_HANDLER=false
+        <h3>2. Une commande : <code>just build</code></h3>
+        <p>Inspecte tous les <code>mcm-agent-*</code> <em>running</em>, écrit <code>lab/.env.tenants</code> (<code>MGMT_API_WS_URLS</code>) et <code>lab/compose.tenants.yml</code> (réseaux Docker des stacks agent, en ignorant le réseau overlay <code>sdk-fececam</code>), puis <code>docker compose up --build -d</code>. Un nouvel agent up suffit : relancer <code>just build</code>, sans éditer les noms de réseaux à la main.</p>
+        <div class="warn"><code>just build</code> rattache <strong>tous</strong> les <code>mcm-agent-*</code> running. Un DFSP qui doit rester 1:1 (ex. <code>moov</code> prod) sera aussi branché si <code>mcm-agent-moov</code> tourne. Ne lancer le build que lorsque les agents visés sont ceux de l’overlay, ou arrêter <em>brièvement</em> l’agent à exclure pendant le <code>just build</code> (le SDK dédié se reconnecte au <code>docker start</code> de l’agent).</div>
+<pre><code>cd /chemin/sdk-scheme-adapter-multi-tenant
+# ou depuis ~ si ~/.justfile pointe vers ce clone
+just tenants    # aperçu id / réseau, sans builder
+just build
+sleep 15
+curl -sS http://127.0.0.1:11000/pm4ml-tenants
+docker exec sdk-fececam getent hosts mcm-agent-&lt;idA&gt;
+just logs-overlay
 </code></pre>
+        <p>Attendu : JSON <code>tenants</code> avec tous les IDs, <code>backendEndpoint</code> contenant <code>/mojaloop</code>, <code>outboundCertBytes</code> &gt; 0.</p>
         <p><code>MULTI_DFSP</code> n’est <strong>pas</strong> à activer : l’overlay le désactive dans le routeur pour que le Hub reste sur <code>/parties</code>.</p>
 
-        <h3>3. Réseaux Docker + démarrage</h3>
-        <p>Le SDK doit être attaché au réseau de <strong>chaque</strong> <code>mcm-agent-*</code> (sinon le WS ne résout pas).</p>
-<pre><code>cd /chemin/sdk-scheme-adapter-multi-tenant
+        <h3>3. Activer la clé outbound (optionnel)</h3>
+<pre><code># lab/.env
+OUTBOUND_API_KEY_ENABLED=true
+OUTBOUND_API_KEY=&lt;secret&gt;
+just build
 
-# Pour chaque agent déjà up :
-export NET_A=$(docker inspect mcm-agent-&lt;idA&gt; \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-export NET_B=$(docker inspect mcm-agent-&lt;idB&gt; \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-
-export IN=11000 OUT=11001 MET=11040   # adapter si ces ports sont pris
-
-# lab/docker-compose.yml : networks.external.name = ${NET_A} / ${NET_B}
-docker compose -f lab/docker-compose.yml up --build -d
-sleep 15
-curl -sS http://127.0.0.1:${IN}/pm4ml-tenants
-docker exec sdk-fececam getent hosts mcm-agent-&lt;idA&gt;
+curl -sS -H "X-API-Key: &lt;secret&gt;" -X POST \
+  'http://127.0.0.1:11001/&lt;dfspId&gt;/transfers' -H 'Content-Type: application/json' -d '{...}'
+# équivalent : -H "Authorization: Bearer &lt;secret&gt;"
+# sans header → 401 ; ENABLED=true et clé vide → 503
 </code></pre>
-        <p>Attendu : JSON <code>tenants</code> avec tous les IDs, <code>backendEndpoint</code> contenant <code>/mojaloop</code> (OpenCBS), <code>outboundCertBytes</code> &gt; 0.</p>
+        <p>Le CBS doit envoyer le même secret. <code>ENABLED=false</code> : curl nu comme avant (le secret dans <code>.env</code> est ignoré).</p>
 
         <h3>4. WAF (générique)</h3>
         <p>Chaque FQDN overlay pointe vers <strong>le même</strong> inbound. L’UI MCM reste sur le port de <em>cet</em> agent.</p>
@@ -1017,8 +1008,20 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://&lt;DFSP_FQDN&gt;/ping
         <ol class="steps">
           <li><code>GET http://127.0.0.1:&lt;IN&gt;/pm4ml-tenants</code> depuis le nœud.</li>
           <li>Inbound : Host FQDN + Destination identique → 202 sur <code>GET /parties</code>.</li>
-          <li>Outbound : <code>POST http://127.0.0.1:&lt;OUT&gt;/&lt;dfspId&gt;/transfers</code> → COMPLETED si CBS + counterparties OK.</li>
+          <li>Outbound : <code>POST http://127.0.0.1:&lt;OUT&gt;/&lt;dfspId&gt;/transfers</code> → JSON compact (ajouter <code>X-API-Key</code> ou Bearer si ENABLED). Dump brut : <code>X-SDK-Verbose: 1</code>.</li>
         </ol>
+<pre><code>{
+  "ok": true,
+  "currentState": "COMPLETED",
+  "transferId": "…",
+  "payer": { "fsp": "&lt;dfspId&gt;", "idType": "MSISDN", "idValue": "…" },
+  "payee": { "fsp": "&lt;fsp ALS&gt;", "idType": "ALIAS", "idValue": "…" },
+  "amount": "10000",
+  "currency": "XOF",
+  "fulfilState": "COMMITTED",
+  "error": null
+}
+</code></pre>
 
         <h3>POC sans Hub</h3>
 <pre><code>docker compose -f poc/docker-compose.yml up --build
@@ -1028,22 +1031,14 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://&lt;DFSP_FQDN&gt;/ping
         <div class="ctx">
           <strong>Contexte actuel lab openmfi (exemple, pas un gabarit universel)</strong>
           <p>Nœud SDK <code>172.25.2.117</code> · WAF <code>41.214.65.90</code> · Hub FSPIOP <code>extapi.openmfi.org</code> → <code>172.16.2.28</code> · suffixe <code>.ext.openmfi.org</code>.</p>
-          <p>Tenants overlay : <code>cmcalavi</code>, <code>gto</code>, <code>moov-test</code>. <code>moov</code> prod (<code>:6000</code>) <strong>hors</strong> overlay.</p>
-          <p>Ports overlay : inbound <code>11000</code>, outbound <code>11001</code>, metrics <code>127.0.0.1:11040</code>.</p>
-<pre><code>cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant
-
-export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-export GTO_DOCKER_NET=$(docker inspect mcm-agent-gto \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-export MOOV_TEST_DOCKER_NET=$(docker inspect mcm-agent-moov-test \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-export IN=11000 OUT=11001 MET=11040
-
-docker compose -f lab/docker-compose.yml up --build -d
+          <p>Tenants overlay : tout <code>mcm-agent-*</code> running (lab : <code>cmcalavi</code>, <code>gto</code>, <code>moov-test</code>). <code>moov</code> prod (<code>:6000</code>) <strong>hors</strong> overlay.</p>
+          <p>Conteneur / réseau <code>sdk-fececam</code> · image <code>sdk-scheme-adapter-multi-dfsp:latest</code> · ports <code>11000</code> / <code>11001</code> / metrics <code>127.0.0.1:11040</code>.</p>
+<pre><code>cp ~/sdk-fececam/sdk-scheme-adapter-multi-tenant/justfile ~/.justfile   # une fois
+just tenants
+just build
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
+just logs-overlay
 </code></pre>
-          <p><code>MGMT_API_WS_URLS</code> actuel : <code>cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004,moov-test@mcm-agent-moov-test:4004</code>.</p>
           <p>WAF DFSP overlay : <code>proxy_pass http://172.25.2.117:11000;</code>. UI <code>mcm-moov-test</code> → <code>:10203</code> (pas 11000). Fallback backend Compose : <code>172.16.2.16:8100/mojaloop</code>.</p>
         </div>
       </section>
@@ -1055,7 +1050,7 @@ curl -sS http://127.0.0.1:11000/pm4ml-tenants
         <h3>A. Nœud Linux (rien d’installé)</h3>
         <ul class="check">
           <li>VM Linux (x86_64), accès root/sudo, disque pour images + volumes Vault.</li>
-          <li>Docker Engine 24+ et Compose v2, git, curl, jq, openssl, gettext-base (<code>envsubst</code>).</li>
+          <li>Docker Engine 24+ et Compose v2, git, curl, jq, openssl, gettext-base (<code>envsubst</code>), <code>just</code>.</li>
           <li>Pull possible : <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>, <code>hashicorp/vault:1.20</code>, <code>ndelma/mcm-agent:0.1.1</code>, <code>redis:7-alpine</code>, <code>nginx:1.27-alpine</code>.</li>
           <li>Clone de l’overlay + templates Compose participant.</li>
           <li>Ports hôtes libres : UI agent (un port par DFSP) ; couple overlay inbound/outbound/metrics (ex. 11000/11001/11040) ; ne pas republier <code>4004</code> sur l’hôte.</li>
@@ -1064,11 +1059,13 @@ curl -sS http://127.0.0.1:11000/pm4ml-tenants
 sudo apt-get update
 sudo apt-get install -y git curl jq openssl gettext-base ca-certificates
 # installer Docker Engine + plugin compose (doc Docker officielle)
+sudo apt-get install -y just
 docker version
 docker compose version
 
 git clone &lt;repo-toolkit&gt;
 # overlay : contrib/sdk-scheme-adapter-multi-tenant
+# justfile : cp …/justfile ~/.justfile
 </code></pre>
 
         <h3>B. Hub / switch (doit exister avant tout DFSP)</h3>
@@ -1120,7 +1117,7 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
 
         <h3>F. Overlay déjà prévu sur le nœud</h3>
         <ul class="check">
-          <li>Fichier <code>lab/docker-compose.yml</code> éditable (réseaux externes + <code>MGMT_API_WS_URLS</code>).</li>
+          <li>Clone overlay + <code>just</code>. Les réseaux / <code>MGMT_API_WS_URLS</code> sont générés (<code>just build</code>), pas figés dans le compose.</li>
           <li>Ne pas changer CoreDNS / WAF des DFSPs <strong>hors</strong> overlay.</li>
         </ul>
 
@@ -1224,25 +1221,9 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
         <p>Créer comptes, aliases, lignes <code>cbs.counterparties</code> pour chaque FSP payer prévu.</p>
 
         <h3>7. Brancher l’agent sur l’overlay</h3>
-<pre><code>cd /chemin/sdk-scheme-adapter-multi-tenant
-
-export NEW_NET=$(docker inspect mcm-agent-${DFSP_ID} \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-echo "NEW_NET=$NEW_NET"
-</code></pre>
-        <p>Éditer <code>lab/docker-compose.yml</code> :</p>
-        <ol class="steps">
-          <li>Concaténer <code>${DFSP_ID}@mcm-agent-${DFSP_ID}:4004</code> à <code>MGMT_API_WS_URLS</code> (ne pas retirer les tenants déjà là).</li>
-          <li>Ajouter le réseau sous <code>sdk.networks</code>.</li>
-          <li>Déclarer le réseau externe :</li>
-        </ol>
-<pre><code>  &lt;dfsp&gt;:
-    external: true
-    name: ${NEW_NET_VAR:?inspect mcm-agent}
-</code></pre>
-        <p>Ré-exporter <strong>tous</strong> les <code>*_DOCKER_NET</code> des tenants déjà présents, plus le nouveau, puis :</p>
-<pre><code>export IN=11000 OUT=11001 MET=11040
-docker compose -f lab/docker-compose.yml up --build -d
+        <p>L’agent doit être <strong>running</strong> (<code>mcm-agent-${DFSP_ID}</code>). Pas d’édition manuelle des réseaux Compose. Rappel : le build rattache aussi les autres <code>mcm-agent-*</code> déjà up.</p>
+<pre><code>just tenants    # doit lister ${DFSP_ID}
+just build
 sleep 15
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
 docker exec sdk-fececam getent hosts mcm-agent-${DFSP_ID}
@@ -1262,7 +1243,7 @@ curl -sS -o /tmp/in.json -w "HTTP %{http_code}\n" \
   "http://127.0.0.1:11000/parties/MSISDN/22900000000"
 # inbound 202 ; outbound préfixe 200
 </code></pre>
-        <p>CBS : <code>POST http://${SDK_HOST}:11001/${DFSP_ID}/transfers</code>.</p>
+        <p>CBS : <code>POST http://${SDK_HOST}:11001/${DFSP_ID}/transfers</code> (+ <code>X-API-Key</code> ou <code>Authorization: Bearer</code> si ENABLED). Réponse compacte : <code>payee.fsp</code> = FSP ALS réel (le préfixe d’URL = payer, le champ note JSON n’est pas l’identité).</p>
 
         <div class="warn">Ne pas réutiliser subnet Docker figé. Vault 1.20.4 : UID 100 + SKIP_SETCAP. Un <code>AUTH_CLIENT_ID</code> exporté dans le shell écrase le <code>.env</code> → toujours <code>unset</code> + <code>manage.sh</code>.</div>
       </section>
@@ -1290,25 +1271,8 @@ docker inspect mcm-agent-${DFSP_ID} \
 </code></pre>
         <p>Vérifier le WAF actuel : <code>proxy_pass http://${SDK_HOST}:&lt;PORT_INBOUND_ANCIEN&gt;</code>. L’UI MCM ne change pas de port.</p>
 
-        <h3>2. Préparer l’overlay (fichiers) <em>avant</em> le stop</h3>
-        <p>Dans <code>lab/docker-compose.yml</code> : ajouter <code>${DFSP_ID}@mcm-agent-${DFSP_ID}:4004</code> à <code>MGMT_API_WS_URLS</code>, réseau externe, attache au service <code>sdk</code>.</p>
-<pre><code>cd "$OVERLAY"
-
-# TOUS les agents déjà sur l’overlay + le nouveau
-export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-export GTO_DOCKER_NET=$(docker inspect mcm-agent-gto \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-export MOOV_TEST_DOCKER_NET=$(docker inspect mcm-agent-moov-test \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-
-# générique pour un id quelconque :
-export NEW_NET=$(docker inspect mcm-agent-${DFSP_ID} \
-  -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-
-export IN=11000 OUT=11001 MET=11040
-echo "new=$NEW_NET"
-</code></pre>
+        <h3>2. Préparer l’overlay <em>avant</em> le stop</h3>
+        <p>Vérifier que <code>mcm-agent-${DFSP_ID}</code> tourne. <code>just tenants</code> doit déjà le lister. Aucun export de réseau à la main. Contrôler la liste : un agent 1:1 à ne pas overlay (ex. <code>moov</code>) ne doit pas apparaître, sinon l’exclure le temps du build.</p>
 
         <h3>3. Déconnecter le SDK dédié</h3>
         <p>Fenêtre d’outage Hub pour <em>ce</em> DFSP jusqu’au reload WAF.</p>
@@ -1321,7 +1285,7 @@ docker ps -a --filter name=sdk-scheme-adapter-${DFSP_ID}
 
         <h3>4. Recréer l’overlay + vérifier les autres tenants</h3>
 <pre><code>cd "$OVERLAY"
-docker compose -f lab/docker-compose.yml up --build -d
+just build
 sleep 15
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
 docker exec sdk-fececam getent hosts mcm-agent-${DFSP_ID}
@@ -1360,10 +1324,13 @@ http://${SDK_HOST}:11001/${DFSP_ID}/parties/...
 <pre><code># 1. WAF : proxy_pass → :&lt;PORT_INBOUND_ANCIEN&gt;
 nginx -t &amp;&amp; systemctl reload nginx
 
-# 2. Retirer ${DFSP_ID}@… de MGMT_API_WS_URLS + réseau compose
+# 2. just build rattache TOUS les mcm-agent-* running.
+#    Pour ne plus lier CE dfsp à l’overlay : docker stop mcm-agent-${DFSP_ID},
+#    just build, puis relancer l’agent (le SDK 1:1 s’y reconnecte).
 cd "$OVERLAY"
-# ré-exporter les *_DOCKER_NET restants
-docker compose -f lab/docker-compose.yml up -d
+docker stop mcm-agent-${DFSP_ID}
+just build
+docker start mcm-agent-${DFSP_ID}
 
 # 3. Relancer le SDK dédié
 docker update --restart=unless-stopped sdk-scheme-adapter-${DFSP_ID}
@@ -1372,7 +1339,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
 
 # 4. CBS : reverting l’URL outbound vers :&lt;PORT_OUTBOUND_ANCIEN&gt;
 </code></pre>
-        <p>Agent / Vault restent up pendant tout le cutover et le rollback.</p>
+        <p>Vault du DFSP reste up. L’agent n’est arrêté que le temps du <code>just build</code> de détachement, puis relancé pour le SDK 1:1.</p>
 
         <div class="ctx">
           <strong>Contexte actuel exemple moov-test</strong>
@@ -1384,11 +1351,12 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         <h2>Sécurité</h2>
         <p>Isolation overlay : tenant inbound = Host ; mismatch Destination → 400 ; outbound sans préfixe → 404 ; <code>/pm4ml-tenants</code> masqué derrière le WAF ; metrics bind localhost.</p>
         <p>Réponse outbound compacte par défaut (<code>OUTBOUND_COMPACT_RESPONSE=true</code>) : plus d’<code>ilpPacket</code>, headers Hub, ni config axios. Dump complet : <code>-H 'X-SDK-Verbose: 1'</code>.</p>
-        <p>Clé outbound : <code>lab/.env</code> → <code>OUTBOUND_API_KEY_ENABLED=true|false</code> et <code>OUTBOUND_API_KEY=…</code>. Rebuild : <code>just build</code> (découvre les <code>mcm-agent-*</code> tout seul).</p>
+        <p>Clé outbound : <code>lab/.env</code> → <code>OUTBOUND_API_KEY_ENABLED=true|false</code> et <code>OUTBOUND_API_KEY=…</code>. Header accepté : <code>X-API-Key</code> ou <code>Authorization: Bearer</code>. Rebuild : <code>just build</code>.</p>
         <table>
           <tr><th>Risque résiduel</th><th>Mesure ops</th></tr>
           <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code></td><td>Lab seulement ; CA Hub en prod</td></tr>
-          <tr><td>Outbound sans clé si <code>OUTBOUND_API_KEY</code> vide</td><td>Firewall :11001 vers CBS ; poser une clé et la configurer sur le CBS</td></tr>
+          <tr><td>Outbound sans clé si <code>OUTBOUND_API_KEY_ENABLED=false</code></td><td>Firewall :11001 vers CBS ; passer ENABLED=true + secret + <code>X-API-Key</code> ou Bearer côté CBS</td></tr>
+          <tr><td><code>X-SDK-Verbose: 1</code></td><td>Dump complet (toujours authentifié si ENABLED). Ne pas l’envoyer depuis le CBS prod</td></tr>
           <tr><td>Inbound overlay</td><td>WAF seulement, pas Internet brut</td></tr>
           <tr><td>JWS off (comme stacks 1:1 lab)</td><td>Activer quand tous les pairs signent</td></tr>
           <tr><td>Un process + Redis pour N DFSPs</td><td>Point unique de défaillance / dump mémoire</td></tr>
@@ -1416,11 +1384,22 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr><td>Documentation VM (LAN)</td><td><code>http://172.25.2.117/documentation</code></td></tr>
           <tr><td>WAF public</td><td><code>41.214.65.90:443</code></td></tr>
           <tr><td>Hub FSPIOP</td><td><code>extapi.openmfi.org</code> → <code>172.16.2.28</code></td></tr>
+          <tr><td>Conteneur / réseau overlay</td><td><code>sdk-fececam</code></td></tr>
+          <tr><td>Image overlay</td><td><code>sdk-scheme-adapter-multi-dfsp:latest</code></td></tr>
           <tr><td>Overlay inbound</td><td><code>172.25.2.117:11000</code></td></tr>
           <tr><td>Overlay outbound</td><td><code>172.25.2.117:11001/{dfspId}/</code></td></tr>
           <tr><td>Overlay metrics</td><td><code>127.0.0.1:11040</code></td></tr>
           <tr><td>Debug tenants</td><td><code>http://127.0.0.1:11000/pm4ml-tenants</code></td></tr>
         </table>
+        <h3>Commandes nœud</h3>
+<pre><code>just build              # overlay (découverte + rebuild)
+just tenants            # mcm-agent-* + réseaux Docker
+just logs-overlay       # logs sdk-fececam
+just logs moov          # SDK 1:1 (alias : just logs calavi → cmcalavi)
+just logs-mcm moov-test # logs mcm-agent-moov-test
+just ps                 # sdk-scheme-adapter-*
+# overlay ailleurs : OVERLAY_DIR=/chemin just build
+</code></pre>
         <h3>Publier cette doc sur la VM</h3>
 <pre><code>cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant/docs-web
 docker compose up -d
