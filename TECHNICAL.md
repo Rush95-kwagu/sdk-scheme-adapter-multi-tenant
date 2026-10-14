@@ -289,11 +289,11 @@ Wrap overlay lookup : si le CBS omet `idType` / `idValue`, les handlers rempliss
 | `BACKEND_ENDPOINT` | fallback `172.16.2.16:8100/mojaloop` | Écrasé par NOTIFY agent |
 | `INBOUND_LISTEN_PORT` | `5000` | |
 | `OUTBOUND_LISTEN_PORT` | `5001` | |
-| `INBOUND_MUTUAL_TLS_ENABLED` | `false` | TLS terminé au WAF |
+| `INBOUND_MUTUAL_TLS_ENABLED` | `false` | TLS terminé au WAF (`ssl_verify_client`). Ne pas passer le SDK en HTTPS derrière `proxy_pass http://` |
 | `OUTBOUND_MUTUAL_TLS_ENABLED` | `true` | Certs **par tenant** (NOTIFY) |
-| `JWS_SIGN` / `VALIDATE_INBOUND_JWS` | lab : souvent `false` | Prod : JWS par tenant |
+| `JWS_SIGN` / `VALIDATE_INBOUND_JWS` | `true` | Clé / peer keys PM4ML par tenant. PUT /parties : flags séparés, défaut `false` |
 | `ENABLE_*_EVENT_HANDLER` | `false` | Pas de Kafka dans ce POC |
-| `NODE_TLS_REJECT_UNAUTHORIZED` | `0` | Lab uniquement |
+| `NODE_TLS_REJECT_UNAUTHORIZED` | `1` | CA Hub dans `outbound.tls.creds.ca` (NOTIFY). `0` = trou lab |
 | `extra_hosts` | `extapi.openmfi.org:172.16.2.28` | Évite le WAF pour le client mTLS |
 
 `MULTI_DFSP` (préfixe de chemin **backend**) est un autre flag officiel. En multi-tenant PM4ML, le routeur inbound le désactive (`multiDfsp: false`) pour ne pas exiger `/cmcalavi/parties` côté Hub.

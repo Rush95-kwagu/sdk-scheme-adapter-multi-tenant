@@ -382,6 +382,10 @@ const createJwsValidator = (logger, keys, exclusions) => {
 
             if (isPingRoute(ctx)) return await next();
 
+            if (ctx.state.conf && ctx.state.conf.validateInboundJws === false) {
+                return await next();
+            }
+
             // we dont check signatures on GET requests
             // todo: validate this requirement. No state is mutated by GETs but
             // there are potential security issues if message origin is used to

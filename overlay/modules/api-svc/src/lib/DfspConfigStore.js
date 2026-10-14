@@ -5,6 +5,8 @@ const TENANT_KEYS = [
     'jwsSigningKey',
     'jwsSign',
     'validateInboundJws',
+    'jwsSignPutParties',
+    'validateInboundPutPartiesJws',
     'peerJWSKeys',
     'backendEndpoint',
     'peerEndpoint',
@@ -15,6 +17,8 @@ const TENANT_KEYS = [
     'bulkQuotesEndpoint',
     'bulkTransfersEndpoint',
     'supportedCurrencies',
+    'autoAcceptQuotes',
+    'autoAcceptParty',
 ];
 
 const SKIP_DFSP_IDS = new Set(['', 'placeholder', 'mojaloop']);
@@ -115,6 +119,17 @@ function pickTenantSlice(conf) {
     }
     if (conf.mutualTLS) {
         slice.mutualTLS = conf.mutualTLS;
+    }
+    if (slice.jwsSigningKey !== undefined) {
+        const pem = pemString(slice.jwsSigningKey);
+        if (pem) slice.jwsSigningKey = pem;
+    }
+    if (slice.peerJWSKeys && typeof slice.peerJWSKeys === 'object') {
+        const keys = {};
+        for (const [id, key] of Object.entries(slice.peerJWSKeys)) {
+            keys[id] = pemString(key) || key;
+        }
+        slice.peerJWSKeys = keys;
     }
     return slice;
 }

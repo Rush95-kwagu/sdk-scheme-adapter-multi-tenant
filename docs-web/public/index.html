@@ -702,7 +702,8 @@ done
           <tr><td><code>mcm.auth.tokenEndpoint</code></td><td><code>https://hydra.ext.openmfi.org/oauth2/token</code></td></tr>
           <tr><td>Endpoints Hub</td><td><strong>Sans</strong> <code>:443</code></td></tr>
           <tr><td><code>sdk.fqdn</code> / <code>callbackUrl</code></td><td><code>https://&lt;DFSP_FQDN&gt;</code></td></tr>
-          <tr><td><code>sdk.jws</code> au boot</td><td><code>sign/validateInbound: false</code> (PM4ML pousse ensuite)</td></tr>
+          <tr><td><code>sdk.jws</code></td><td><code>sign: true</code>, <code>validateInbound: true</code> (aligné overlay)</td></tr>
+          <tr><td><code>sdk.tls</code></td><td><code>outboundMutual: true</code>, <code>inboundMutual: true</code> (inbound réel = WAF, pas le listen SDK)</td></tr>
           <tr><td><code>sdk.pm4mlEnabled</code></td><td><code>true</code></td></tr>
         </table>
         <p>Après changement de secret / JSON : wipe Vault souvent nécessaire (l’agent préfère les secrets Vault).</p>
@@ -723,7 +724,8 @@ docker volume rm ${DFSP_ID}_vault-data-${DFSP_ID} ${DFSP_ID}_vault-creds-${DFSP_
           <tr><td><code>PEER_ENDPOINT</code> / ALS / quotes / transfers</td><td>FQDN Hub, sans schéma</td></tr>
           <tr><td><code>INBOUND_MUTUAL_TLS_ENABLED</code></td><td><code>false</code> si TLS terminé au WAF</td></tr>
           <tr><td><code>OUTBOUND_MUTUAL_TLS_ENABLED</code></td><td><code>true</code> (certs via PM4ML)</td></tr>
-          <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED</code></td><td><code>0</code> lab (CA Hub privée)</td></tr>
+          <tr><td><code>JWS_SIGN</code> / <code>VALIDATE_INBOUND_JWS</code></td><td><code>true</code> (clés via PM4ML)</td></tr>
+          <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED</code></td><td><code>1</code> (CA Hub dans le slice PM4ML)</td></tr>
           <tr><td><code>PM4ML_MULTI_TENANT</code></td><td>absent / <code>false</code></td></tr>
         </table>
 
@@ -918,7 +920,7 @@ kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-sdk-internal 4040:4040
           <tr><th>Fonction</th><th>Détail</th></tr>
           <tr><td>N ControlAgent</td><td><code>MGMT_API_WS_URLS=id@host:4004,...</code> ancre <code>id@</code> si le NOTIFY omet <code>dfspId</code></td></tr>
           <tr><td>Upsert sans restart</td><td>Un NOTIFY d’un tenant ne coupe pas les autres</td></tr>
-          <tr><td>TLS / JWS par tenant</td><td>Cert client Hub et clé JWS du slice</td></tr>
+          <tr><td>TLS / JWS par tenant</td><td>mTLS outbound Hub (PEM NOTIFY) + JWS sign/validate. Inbound mTLS au WAF</td></tr>
           <tr><td>Backend par tenant</td><td>NOTIFY agent écrase le fallback Compose</td></tr>
           <tr><td>Wrap lookup</td><td>Complète <code>partyIdType</code> / <code>partyIdentifier</code> si le CBS omet les ids (évite 3102)</td></tr>
           <tr><td><code>GET /pm4ml-tenants</code></td><td>Debug depuis le nœud (<code>127.0.0.1:&lt;IN&gt;</code>). 404 via le WAF (en-têtes <code>X-Forwarded-*</code>)</td></tr>
@@ -944,6 +946,10 @@ kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-sdk-internal 4040:4040
         <table>
           <tr><th>Variable</th><th>Rôle</th></tr>
           <tr><td><code>IN</code> / <code>OUT</code> / <code>MET</code></td><td>Ports hôte overlay (un couple pour tous les tenants)</td></tr>
+          <tr><td><code>JWS_SIGN</code> / <code>VALIDATE_INBOUND_JWS</code></td><td><code>true</code> — clés par tenant (NOTIFY). PUT /parties : flags séparés, défaut off</td></tr>
+          <tr><td><code>OUTBOUND_MUTUAL_TLS_ENABLED</code></td><td><code>true</code> — cert client Hub par tenant</td></tr>
+          <tr><td><code>INBOUND_MUTUAL_TLS_ENABLED</code></td><td><code>false</code> — ne pas activer : le WAF termine le TLS (<code>proxy_pass http://</code>)</td></tr>
+          <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED</code></td><td><code>1</code> — vérifier la CA Hub. <code>0</code> = trou (lab seulement)</td></tr>
           <tr><td><code>OUTBOUND_COMPACT_RESPONSE</code></td><td><code>true</code> (défaut) : JSON CBS résumé</td></tr>
           <tr><td><code>OUTBOUND_API_KEY_ENABLED</code></td><td><code>false</code> = pas de contrôle ; <code>true</code> = header <code>X-API-Key</code> obligatoire</td></tr>
           <tr><td><code>OUTBOUND_API_KEY</code></td><td>Secret (ignoré si ENABLED=false). Si ENABLED=true et vide → 503</td></tr>
@@ -966,6 +972,7 @@ just logs-overlay
 </code></pre>
         <p>Attendu : JSON <code>tenants</code> avec tous les IDs, <code>backendEndpoint</code> contenant <code>/mojaloop</code>, <code>outboundCertBytes</code> &gt; 0.</p>
         <p><code>MULTI_DFSP</code> n’est <strong>pas</strong> à activer : l’overlay le désactive dans le routeur pour que le Hub reste sur <code>/parties</code>.</p>
+        <p>Après <code>just build</code>, <code>GET /pm4ml-tenants</code> doit montrer <code>jwsSigningKeyBytes</code> &gt; 0, <code>peerJwsCount</code> &gt; 0, <code>outboundCertBytes</code> / <code>outboundCaBytes</code> &gt; 0, <code>jwsSign: true</code>. Sinon MCM Status 8/8 incomplet (CSR / Hub CA / peer JWS).</p>
 
         <h3>3. Activer la clé outbound (optionnel)</h3>
 <pre><code># lab/.env
@@ -996,8 +1003,16 @@ curl -sS -H "X-API-Key: &lt;secret&gt;" -X POST \
         proxy_pass_request_headers on;
     }
 }
-# mcm-&lt;id&gt; → http://&lt;SDK_HOST&gt;:&lt;PORT_UI_AGENT&gt;   (pas &lt;IN&gt;)
+# mcm-&lt;id&gt; → http://&lt;SDK_HOST&gt;:&lt;PORT_UI_AGENT&gt;   (pas &lt;IN&gt; ; pas de ssl_verify_client)
 </code></pre>
+        <p>mTLS <strong>inbound</strong> (Hub → DFSP) : sur le vhost FSPIOP seulement, pas sur l’UI MCM. Le Hub présente un certificat client signé par la CA Hub (fichier exporté MCM / Vault switch).</p>
+<pre><code>    # vhost FSPIOP uniquement
+    ssl_verify_client optional;   # le temps du cutover ; puis "on"
+    ssl_client_certificate /etc/nginx/certs/hub-ca.pem;
+    ssl_verify_depth 3;
+    # si ssl_verify_client on : refuser ssl_client_verify != SUCCESS
+</code></pre>
+        <div class="warn">Ne pas mettre <code>INBOUND_MUTUAL_TLS_ENABLED=true</code> sur <code>sdk-fececam</code> tant que le WAF fait <code>proxy_pass http://…:11000</code> : le SDK passerait en HTTPS et le Hub recevrait des 502. <code>sdk.tls.inboundMutual</code> dans l’agent décrit l’intention Hub/WAF, pas le listen Node.</div>
 <pre><code>nginx -t &amp;&amp; systemctl reload nginx
 curl -sS -o /dev/null -w "%{http_code}\n" https://&lt;DFSP_FQDN&gt;/ping
 # 405 = vhost OK
@@ -1007,7 +1022,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://&lt;DFSP_FQDN&gt;/ping
         <h3>5. Tests minimaux</h3>
         <ol class="steps">
           <li><code>GET http://127.0.0.1:&lt;IN&gt;/pm4ml-tenants</code> depuis le nœud.</li>
-          <li>Inbound : Host FQDN + Destination identique → 202 sur <code>GET /parties</code>.</li>
+          <li>Inbound : Host FQDN + Destination identique → 202 sur <code>GET /parties</code> (GET non signé). Un POST Hub sans JWS → 400 <code>INVALID_SIGNATURE</code>.</li>
           <li>Outbound : <code>POST http://127.0.0.1:&lt;OUT&gt;/&lt;dfspId&gt;/transfers</code> → JSON compact (ajouter <code>X-API-Key</code> ou Bearer si ENABLED). Dump brut : <code>X-SDK-Verbose: 1</code>.</li>
         </ol>
 <pre><code>{
@@ -1350,15 +1365,18 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
       <section id="securite" class="section">
         <h2>Sécurité</h2>
         <p>Isolation overlay : tenant inbound = Host ; mismatch Destination → 400 ; outbound sans préfixe → 404 ; <code>/pm4ml-tenants</code> masqué derrière le WAF ; metrics bind localhost.</p>
+        <p>JWS : signature outbound et validation inbound Hub (hors GET, hors PUT /parties par défaut). mTLS outbound vers <code>extapi</code> avec le cert client du tenant. mTLS inbound = <code>ssl_verify_client</code> au WAF.</p>
         <p>Réponse outbound compacte par défaut (<code>OUTBOUND_COMPACT_RESPONSE=true</code>) : plus d’<code>ilpPacket</code>, headers Hub, ni config axios. Dump complet : <code>-H 'X-SDK-Verbose: 1'</code>.</p>
         <p>Clé outbound : <code>lab/.env</code> → <code>OUTBOUND_API_KEY_ENABLED=true|false</code> et <code>OUTBOUND_API_KEY=…</code>. Header accepté : <code>X-API-Key</code> ou <code>Authorization: Bearer</code>. Rebuild : <code>just build</code>.</p>
         <table>
           <tr><th>Risque résiduel</th><th>Mesure ops</th></tr>
-          <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code></td><td>Lab seulement ; CA Hub en prod</td></tr>
+          <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code></td><td>Interdit hors debug CA ; remettre <code>1</code></td></tr>
+          <tr><td>WAF sans <code>ssl_verify_client</code></td><td>Installer la CA Hub, passer <code>optional</code> puis <code>on</code> sur les vhosts FSPIOP</td></tr>
           <tr><td>Outbound sans clé si <code>OUTBOUND_API_KEY_ENABLED=false</code></td><td>Firewall :11001 vers CBS ; passer ENABLED=true + secret + <code>X-API-Key</code> ou Bearer côté CBS</td></tr>
           <tr><td><code>X-SDK-Verbose: 1</code></td><td>Dump complet (toujours authentifié si ENABLED). Ne pas l’envoyer depuis le CBS prod</td></tr>
-          <tr><td>Inbound overlay</td><td>WAF seulement, pas Internet brut</td></tr>
-          <tr><td>JWS off (comme stacks 1:1 lab)</td><td>Activer quand tous les pairs signent</td></tr>
+          <tr><td>Inbound overlay en HTTP derrière le WAF</td><td>Attendu ; ne pas ouvrir :11000 hors WAF</td></tr>
+          <tr><td><code>whitelistIp: 0.0.0.0/0</code> dans l’agent</td><td>Restreindre aux IP switch / WAF en prod</td></tr>
+          <tr><td>Secret Hydra dans <code>default.json</code></td><td>Fichier root-only ; ne pas coller le secret dans un chat / git ; le rotationner s’il a fuité</td></tr>
           <tr><td>Un process + Redis pour N DFSPs</td><td>Point unique de défaillance / dump mémoire</td></tr>
         </table>
 <pre><code># nft / iptables (exemple) : :11001 seulement depuis le CBS

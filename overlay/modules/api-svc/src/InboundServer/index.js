@@ -58,7 +58,9 @@ class InboundApi extends EventEmitter {
             // peerJWSKey is a special config option specifically for Payment Manager for Mojaloop
             // that is populated by a management api.
             // This map supersedes local keys that would be loaded in by jwsVerificationKeysDirectory.
-            this._jwsVerificationKeys = conf.pm4mlEnabled ? conf.peerJWSKeys : InboundApi._GetJwsKeys(conf.jwsVerificationKeysDirectory);
+            this._jwsVerificationKeys = conf.pm4mlEnabled
+                ? (conf.peerJWSKeys || {})
+                : InboundApi._GetJwsKeys(conf.jwsVerificationKeysDirectory);
         }
         this._api = InboundApi._SetupApi({
             conf,
@@ -120,11 +122,6 @@ class InboundApi extends EventEmitter {
         api.use(middlewares.createRequestIdGenerator(logger));
         api.use(middlewares.createLogger(logger));
         api.use(middlewares.createHeaderValidator(conf));
-        if (conf.validateInboundJws) {
-            const jwsExclusions = conf.validateInboundPutPartiesJws ? [] : ['putParties'];
-            api.use(middlewares.createJwsValidator(logger, jwsVerificationKeys, jwsExclusions));
-        }
-
         api.use(middlewares.applyState({ conf, cache, wso2, logExcludePaths: [...logExcludePaths, '/pm4ml-tenants'] }));
         api.use(async (ctx, next) => {
             if (conf.pm4mlMultiTenant && ctx.method === 'GET' && ctx.path === '/pm4ml-tenants') {
@@ -148,6 +145,11 @@ class InboundApi extends EventEmitter {
                             backendConfigured: Boolean(t && t.backendEndpoint),
                             outboundCertBytes: typeof cert === 'string' ? cert.length : null,
                             outboundKeyBytes: typeof key === 'string' ? key.length : null,
+                            outboundCaBytes: typeof (t && t.outboundTls && t.outboundTls.creds && t.outboundTls.creds.ca) === 'string'
+                                ? t.outboundTls.creds.ca.length : null,
+                            jwsSign: t && t.jwsSign,
+                            jwsSigningKeyBytes: typeof (t && t.jwsSigningKey) === 'string' ? t.jwsSigningKey.length : null,
+                            peerJwsCount: t && t.peerJWSKeys ? Object.keys(t.peerJWSKeys).length : 0,
                         };
                     }),
                 };
@@ -157,6 +159,10 @@ class InboundApi extends EventEmitter {
             await next();
         });
         api.use(middlewares.applyPm4mlTenant(conf));
+        if (conf.validateInboundJws) {
+            const jwsExclusions = conf.validateInboundPutPartiesJws ? [] : ['putParties'];
+            api.use(middlewares.createJwsValidator(logger, jwsVerificationKeys, jwsExclusions));
+        }
         api.use(middlewares.createPingMiddleware(conf, jwsVerificationKeys));
         api.use(middlewares.createRequestValidator(validator));
         api.use(middlewares.assignFspiopIdentifier());
