@@ -1383,14 +1383,20 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
       <section id="securite" class="section">
         <h2>Sécurité</h2>
         <p>Isolation overlay : tenant inbound = Host ; mismatch Destination → 400 ; outbound sans préfixe → 404 ; <code>/pm4ml-tenants</code> masqué derrière le WAF ; metrics bind localhost.</p>
+        <p>Réponse outbound compacte par défaut (<code>OUTBOUND_COMPACT_RESPONSE=true</code>) : plus d’<code>ilpPacket</code>, headers Hub, ni config axios. Dump complet : <code>-H 'X-SDK-Verbose: 1'</code>. Clé optionnelle <code>OUTBOUND_API_KEY</code> + header <code>X-API-Key</code>.</p>
         <table>
           <tr><th>Risque résiduel</th><th>Mesure ops</th></tr>
           <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code></td><td>Lab seulement ; CA Hub en prod</td></tr>
-          <tr><td>Outbound overlay sans auth applicative</td><td>Firewall : CBS / ops seulement</td></tr>
+          <tr><td>Outbound sans clé si <code>OUTBOUND_API_KEY</code> vide</td><td>Firewall :11001 vers CBS ; poser une clé et la configurer sur le CBS</td></tr>
           <tr><td>Inbound overlay</td><td>WAF seulement, pas Internet brut</td></tr>
           <tr><td>JWS off (comme stacks 1:1 lab)</td><td>Activer quand tous les pairs signent</td></tr>
           <tr><td>Un process + Redis pour N DFSPs</td><td>Point unique de défaillance / dump mémoire</td></tr>
         </table>
+<pre><code># nft / iptables (exemple) : :11001 seulement depuis le CBS
+# iptables -A INPUT -p tcp --dport 11001 -s &lt;CBS_IP&gt; -j ACCEPT
+# iptables -A INPUT -p tcp --dport 11001 -s 127.0.0.1 -j ACCEPT
+# iptables -A INPUT -p tcp --dport 11001 -j DROP
+</code></pre>
       </section>
 
       <section id="ports" class="section">

@@ -38,6 +38,7 @@ const router = require('../lib/router');
 const handlers = require('./handlers');
 const middlewares = require('./middlewares');
 const inboundMiddlewares = require('../InboundServer/middlewares');
+const { compactOutboundResponse, requireOutboundApiKey } = require('./compactResponse');
 const { KafkaDomainEventProducer, BC_CONFIG } = require('@mojaloop/sdk-scheme-adapter-private-shared-lib');
 const { DefaultLogger } = require('@mojaloop/logging-bc-client-lib');
 
@@ -66,6 +67,7 @@ class OutboundApi extends EventEmitter {
         this._api.use(koaBody({
             formidable: { maxFieldsSize: conf.backendApiServerMaxRequestBytes }
         })); // outbound always expects application/json
+        this._api.use(requireOutboundApiKey(conf));
         this._api.use(middlewares.applyState({
             cache,
             wso2,
@@ -102,6 +104,7 @@ class OutboundApi extends EventEmitter {
         });
         this._api.use(middlewares.createRequestValidator(validator));
         this._api.use(inboundMiddlewares.applyPm4mlTenant(conf));
+        this._api.use(compactOutboundResponse(conf));
         this._api.use(router(handlers, {
             ...conf,
             multiDfsp: conf.pm4mlMultiTenant ? false : conf.multiDfsp,

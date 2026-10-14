@@ -196,6 +196,8 @@ module.exports = {
     multiDfsp: env.get('MULTI_DFSP').default('false').asBool(),
     pm4mlMultiTenant: env.get('PM4ML_MULTI_TENANT').default('false').asBool(),
     dfspHostSuffix: env.get('DFSP_HOST_SUFFIX').default('.ext.openmfi.org').asString(),
+    outboundCompactResponse: env.get('OUTBOUND_COMPACT_RESPONSE').default('true').asBool(),
+    outboundApiKey: env.get('OUTBOUND_API_KEY').default('').asString(),
     ilpSecret: env.get('ILP_SECRET').default('mojaloop-sdk').asString(),
     checkIlp: env.get('CHECK_ILP').default('true').asBool(),
     expirySeconds: env.get('EXPIRY_SECONDS').default('60').asIntPositive(),

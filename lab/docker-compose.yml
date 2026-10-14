@@ -26,7 +26,7 @@ services:
     ports:
       # Inbound : WAF seulement (firewall 41.214.65.90 → :11000). Pas d’exposition Internet brute.
       - "${IN:-11000}:5000"
-      # Outbound : CBS / ops. Filtrer :11001 vers le réseau CBS, pas 0.0.0.0 public.
+      # Outbound : CBS / ops. Filtrer :11001 (nft/iptables) vers le réseau CBS, pas Internet.
       - "${OUT:-11001}:5001"
       - "127.0.0.1:${MET:-11040}:5040"
     extra_hosts:
@@ -38,6 +38,10 @@ services:
       PM4ML_ENABLED: "true"
       PM4ML_MULTI_TENANT: "true"
       DFSP_HOST_SUFFIX: ".ext.openmfi.org"
+      # Réponse CBS : résumé (sans ILP / headers Hub). Dump complet : -H 'X-SDK-Verbose: 1'
+      OUTBOUND_COMPACT_RESPONSE: "true"
+      # Si non vide, POST outbound exige X-API-Key (à poser aussi sur le CBS).
+      OUTBOUND_API_KEY: "${OUTBOUND_API_KEY:-}"
       # L'agent réel n'envoie pas toujours dfspId dans NOTIFY — l'ancre est le préfixe avant @.
       MGMT_API_WS_URLS: "cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004,moov-test@mcm-agent-moov-test:4004"
       DFSP_ID: placeholder
