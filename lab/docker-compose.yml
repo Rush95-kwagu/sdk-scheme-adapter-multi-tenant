@@ -1,13 +1,9 @@
 # Overlay SDK + vrais mcm-agents (pas poc/).
-# Vault / agent / redis de chaque DFSP restent. SDK dédié stoppé.
+# Réseaux tenants : générés (just build → lab/compose.tenants.yml).
 #
-#   export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
-#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-#   export GTO_DOCKER_NET=$(docker inspect mcm-agent-gto \
-#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-#   export MOOV_TEST_DOCKER_NET=$(docker inspect mcm-agent-moov-test \
-#     -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-#   docker compose -f lab/docker-compose.yml up --build -d
+#   just build
+#   # ou : bash lab/discover-tenants.sh && docker compose -f lab/docker-compose.yml \
+#   #          -f lab/compose.tenants.yml --env-file lab/.env --env-file lab/.env.tenants up --build -d
 
 name: sdk-mt
 
@@ -23,27 +19,25 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - redis
+    env_file:
+      - .env
+      - .env.tenants
     ports:
-      # Inbound : WAF seulement (firewall 41.214.65.90 → :11000). Pas d’exposition Internet brute.
       - "${IN:-11000}:5000"
-      # Outbound : CBS / ops. Filtrer :11001 (nft/iptables) vers le réseau CBS, pas Internet.
       - "${OUT:-11001}:5001"
       - "127.0.0.1:${MET:-11040}:5040"
     extra_hosts:
       - "extapi.openmfi.org:172.16.2.28"
     environment:
       LOG_LEVEL: info
-      # Lab Hub CA privée. Ne pas laisser en production sans CA Hub dans trust store.
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
       PM4ML_ENABLED: "true"
       PM4ML_MULTI_TENANT: "true"
       DFSP_HOST_SUFFIX: ".ext.openmfi.org"
-      # Réponse CBS : résumé (sans ILP / headers Hub). Dump complet : -H 'X-SDK-Verbose: 1'
-      OUTBOUND_COMPACT_RESPONSE: "true"
-      # Si non vide, POST outbound exige X-API-Key (à poser aussi sur le CBS).
+      OUTBOUND_COMPACT_RESPONSE: "${OUTBOUND_COMPACT_RESPONSE:-true}"
+      OUTBOUND_API_KEY_ENABLED: "${OUTBOUND_API_KEY_ENABLED:-false}"
       OUTBOUND_API_KEY: "${OUTBOUND_API_KEY:-}"
-      # L'agent réel n'envoie pas toujours dfspId dans NOTIFY — l'ancre est le préfixe avant @.
-      MGMT_API_WS_URLS: "cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004,moov-test@mcm-agent-moov-test:4004"
+      MGMT_API_WS_URLS: "${MGMT_API_WS_URLS:?run just build (discover mcm-agent-*)}"
       DFSP_ID: placeholder
       CACHE_URL: redis://redis:6379
       PEER_ENDPOINT: extapi.openmfi.org
@@ -53,9 +47,6 @@ services:
       TRANSACTION_REQUESTS_ENDPOINT: extapi.openmfi.org
       BULK_QUOTES_ENDPOINT: extapi.openmfi.org
       BULK_TRANSFERS_ENDPOINT: extapi.openmfi.org
-      # Fallback si le NOTIFY agent n’envoie pas backendEndpoint.
-      # GET /mojaloop = SPA HTML ; l’API OpenCBS est sous /mojaloop/parties, /mojaloop/quoterequests.
-      # La valeur réelle vient du NOTIFY mcm-agent — changer aussi le .env des deux agents.
       BACKEND_ENDPOINT: 172.16.2.16:8100/mojaloop
       INBOUND_LISTEN_PORT: "5000"
       OUTBOUND_LISTEN_PORT: "5001"
@@ -74,18 +65,6 @@ services:
       RESOURCE_VERSIONS: transfers=2.0,quotes=2.0,participants=2.0,parties=2.0,transactionRequests=1.1
     networks:
       - sdk-mt
-      - cmcalavi
-      - gto
-      - moov-test
 
 networks:
   sdk-mt:
-  cmcalavi:
-    external: true
-    name: ${CMCALAVI_DOCKER_NET:?set CMCALAVI_DOCKER_NET to mcm-agent-cmcalavi network}
-  gto:
-    external: true
-    name: ${GTO_DOCKER_NET:?set GTO_DOCKER_NET to mcm-agent-gto network}
-  moov-test:
-    external: true
-    name: ${MOOV_TEST_DOCKER_NET:?set MOOV_TEST_DOCKER_NET to mcm-agent-moov-test network}

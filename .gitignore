@@ -1,1 +1,4 @@
 .DS_Store
+lab/.env
+lab/.env.tenants
+lab/compose.tenants.yml

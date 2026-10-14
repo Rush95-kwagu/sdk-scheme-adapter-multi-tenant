@@ -69,9 +69,17 @@ const compactBody = (body, dfspId) => {
 };
 
 const requireOutboundApiKey = (conf) => async (ctx, next) => {
+    if (!conf.outboundApiKeyEnabled) {
+        await next();
+        return;
+    }
     const expected = conf.outboundApiKey;
     if (!expected) {
-        await next();
+        ctx.status = 503;
+        ctx.body = {
+            statusCode: '503',
+            message: 'OUTBOUND_API_KEY_ENABLED=true but OUTBOUND_API_KEY is empty',
+        };
         return;
     }
     const sent = ctx.get('x-api-key')

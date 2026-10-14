@@ -1383,7 +1383,8 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
       <section id="securite" class="section">
         <h2>Sécurité</h2>
         <p>Isolation overlay : tenant inbound = Host ; mismatch Destination → 400 ; outbound sans préfixe → 404 ; <code>/pm4ml-tenants</code> masqué derrière le WAF ; metrics bind localhost.</p>
-        <p>Réponse outbound compacte par défaut (<code>OUTBOUND_COMPACT_RESPONSE=true</code>) : plus d’<code>ilpPacket</code>, headers Hub, ni config axios. Dump complet : <code>-H 'X-SDK-Verbose: 1'</code>. Clé optionnelle <code>OUTBOUND_API_KEY</code> + header <code>X-API-Key</code>.</p>
+        <p>Réponse outbound compacte par défaut (<code>OUTBOUND_COMPACT_RESPONSE=true</code>) : plus d’<code>ilpPacket</code>, headers Hub, ni config axios. Dump complet : <code>-H 'X-SDK-Verbose: 1'</code>.</p>
+        <p>Clé outbound : <code>lab/.env</code> → <code>OUTBOUND_API_KEY_ENABLED=true|false</code> et <code>OUTBOUND_API_KEY=…</code>. Rebuild : <code>just build</code> (découvre les <code>mcm-agent-*</code> tout seul).</p>
         <table>
           <tr><th>Risque résiduel</th><th>Mesure ops</th></tr>
           <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code></td><td>Lab seulement ; CA Hub en prod</td></tr>
