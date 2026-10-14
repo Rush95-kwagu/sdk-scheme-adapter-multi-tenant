@@ -3,19 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SDK multi-tenant documentation</title>
+  <title>openmfi — Hub, SDK 1:1, overlay</title>
   <link rel="stylesheet" href="assets/app.css" />
 </head>
 <body>
   <div class="layout">
     <nav class="side">
       <div class="brand">
-        <h1>SDK scheme-adapter</h1>
-        <p>Toolkit 1:1 + overlay multi-tenant</p>
+        <h1>openmfi · toolkit</h1>
+        <p>Hub · SDK 1:1 · overlay</p>
       </div>
       <div class="group">Vue d’ensemble</div>
       <a class="item" href="#accueil">Accueil</a>
       <a class="item" href="#valeur">Mono DFSP vs overlay</a>
+      <div class="group">Hub Mojaloop</div>
+      <a class="item" href="#hub">Architecture ml-cc</a>
+      <a class="item" href="#hub-net">Réseau, DHCP, NAT</a>
+      <a class="item" href="#hub-prereq">Prérequis et Proxmox</a>
+      <a class="item" href="#hub-env">Environnements</a>
+      <a class="item" href="#hub-deploy">Déploiement Flux</a>
+      <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
       <div class="group">SDK 1:1 (toolkit)</div>
       <a class="item" href="#mono">Architecture 1:1</a>
       <a class="item" href="#mono-prerequis">Prérequis 1:1</a>
@@ -37,24 +44,332 @@
 
     <main>
       <section id="accueil" class="section">
-        <p><span class="badge">toolkit 1:1</span><span class="badge">v24.9.0 overlay</span></p>
-        <h2>SDK scheme-adapter — toolkit et overlay</h2>
-        <p class="lead">Deux chemins documentés ici : le <strong>SDK mono-tenant</strong> du toolkit (un Compose ou un chart Helm par DFSP) et l’<strong>overlay multi-tenant</strong> (un process, N agents). Les IPs lab sont toujours sous <em>Contexte actuel</em>.</p>
+        <p><span class="badge">hub ml-cc</span><span class="badge">toolkit 1:1</span><span class="badge">overlay</span></p>
+        <h2>Switch, SDK 1:1 et overlay</h2>
+        <p class="lead">Trois couches : le <strong>Hub</strong> (Control Center / cluster de test IaC), le <strong>SDK mono-tenant</strong> du toolkit, l’<strong>overlay multi-tenant</strong>. Les IPs lab sont sous <em>Contexte actuel</em>.</p>
         <div class="cards three">
           <div class="card">
+            <h3>Hub Mojaloop</h3>
+            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Voir <a href="#hub">Architecture ml-cc</a>.</p>
+          </div>
+          <div class="card">
             <h3>SDK 1:1 (défaut toolkit)</h3>
-            <p>Vault + mcm-agent + SDK officiel + Redis. Un couple de ports inbound/outbound par DFSP. Procédure validée du lab. Voir <a href="#mono">Architecture 1:1</a>.</p>
+            <p>Vault + mcm-agent + SDK officiel + Redis. Un couple de ports par DFSP. Voir <a href="#mono">Architecture 1:1</a>.</p>
           </div>
           <div class="card">
             <h3>Overlay (opt-in)</h3>
-            <p>Même agents 1:1 ; un seul SDK partagé. Flag <code>PM4ML_MULTI_TENANT</code>. Pas une PR Mojaloop. Voir <a href="#valeur">Mono vs overlay</a>.</p>
-          </div>
-          <div class="card">
-            <h3><code>MULTI_DFSP</code></h3>
-            <p>Flag officiel de <em>préfixe backend</em>. Ce n’est pas N agents, pas N certs. Ne pas le confondre avec l’overlay.</p>
+            <p>Un SDK, N agents. Flag <code>PM4ML_MULTI_TENANT</code> — pas <code>MULTI_DFSP</code>. Voir <a href="#valeur">Mono vs overlay</a>.</p>
           </div>
         </div>
         <div class="note">URLs : <strong>https://docs.ext.openmfi.org/documentation</strong> (WAF) · <code>http://172.25.2.117/documentation</code> (VM, LAN).</div>
+      </section>
+
+      <section id="hub" class="section">
+        <h2>Hub — architecture Control Center</h2>
+        <p>Le switch se déploie en IaC (Terraform + Talos + Flux) depuis le toolkit. Deux clusters distincts :</p>
+        <table>
+          <tr><th>Cluster</th><th>Rôle</th><th>Contenu</th></tr>
+          <tr><td><code>ml-cc</code></td><td>Control Center (<code>tooling</code>)</td><td>Harbor, MinIO, Vault, observabilité</td></tr>
+          <tr><td><code>ml-test</code></td><td>Cluster de test / switch</td><td>Même outil, autre répertoire d’environnement, <strong>autre zone DNS</strong></td></tr>
+        </table>
+        <p>Les deux ne doivent <strong>pas</strong> publier les mêmes noms dans la même zone : external-dns est en <code>policy: sync</code> et <em>efface</em> les enregistrements qu’il ne gère plus.</p>
+        <p>Cible DNS publique : l’annotation <code>external-dns.alpha.kubernetes.io/target</code> est la seule valeur envoyée au DNS. Cilium reste privé. <code>*.int</code> → IP LAN du gateway interne. <code>*.ext</code> de <em>ce</em> cluster → <code>wan</code> (IP de bordure).</p>
+        <p>Guide générique toolkit : <code>docs/adopter/deployment-cc.md</code>. Source lab : <code>docs/adopter/deployment-cc-lab-openmfi.md</code>.</p>
+        <div class="ctx">
+          <strong>Contexte actuel — lab openmfi (validé)</strong>
+          <table>
+            <tr><th>Objet</th><th>Adresse cluster</th><th>Cible DNS</th></tr>
+            <tr><td><code>gw-int</code></td><td><code>192.168.0.211</code></td><td><code>192.168.0.211</code> (pas de <code>wan</code>)</td></tr>
+            <tr><td><code>gw-ext</code></td><td><code>192.168.0.212</code></td><td><code>wan</code> : d’abord <code>192.168.0.154</code>, puis public <code>41.214.65.90</code></td></tr>
+          </table>
+          <p>Kustomizations Ready : <code>platform</code>, <code>dns</code>, <code>platform-config</code>, <code>talos</code>, <code>tooling</code>, <code>tooling-config</code>, <code>tooling-observability</code>, <code>tooling-observability-routes</code>, <code>tooling-routes</code>.</p>
+        </div>
+      </section>
+
+      <section id="hub-net" class="section">
+        <h2>Hub — réseau, DHCP, NAT</h2>
+        <p>Point qui bloque le plus souvent le premier boot Talos. Principe générique : si l’hôte a <strong>deux interfaces dans le même /24</strong> (NIC physique + pont VM), le noyau répond DHCP et route vers les VM par la NIC. La VM, branchée seulement sur le pont, ne voit rien.</p>
+        <p>Symptôme Talos : <code>IP</code> vide, <code>CONNECTIVITY FAILED</code>, <code>STAGE: Booting</code>, Discover DHCP sans Offer.</p>
+        <p>Cible propre : une seule adresse du LAN sur le pont, NIC physique en port du pont. Contournement : routes hôte <code>/32</code> vers le pont + SNAT.</p>
+
+        <div class="ctx">
+          <strong>Contexte actuel — hôte Proxmox <code>monproxmox</code></strong>
+          <table>
+            <tr><th>Interface</th><th>Adresse</th><th>Rôle</th></tr>
+            <tr><td><code>eno1</code></td><td><code>192.168.0.154/24</code></td><td>LAN physique, GW <code>192.168.0.1</code>, SSH, Internet</td></tr>
+            <tr><td><code>vmbr0</code></td><td><code>192.168.0.254/24</code></td><td>Pont Talos, aucune NIC esclave</td></tr>
+            <tr><td><code>tailscale0</code></td><td><code>100.73.74.15/32</code></td><td>Admin</td></tr>
+          </table>
+          <p>Plan <code>ml-cc</code> (exclure du DHCP : GW physique, hôte, VIP, LB) :</p>
+          <table>
+            <tr><th>Adresse</th><th>Usage</th></tr>
+            <tr><td><code>192.168.0.1</code></td><td>Passerelle LAN physique</td></tr>
+            <tr><td><code>192.168.0.154</code></td><td>Hôte <code>eno1</code></td></tr>
+            <tr><td><code>192.168.0.254</code></td><td>Hôte pont : GW / DNS / DHCP des VM</td></tr>
+            <tr><td><code>192.168.0.210</code></td><td><code>cluster.vip</code> (API K8s)</td></tr>
+            <tr><td><code>192.168.0.211</code> / <code>.212</code></td><td><code>gw-int.lan</code> / <code>gw-ext.lan</code></td></tr>
+            <tr><td><code>192.168.0.180</code>–<code>.220</code></td><td>Pool DHCP (<code>ml-cc-m-0</code> a eu <code>.200</code>)</td></tr>
+            <tr><td><code>41.214.65.90</code></td><td><code>gw-ext.wan</code></td></tr>
+          </table>
+          <p><code>ml-test</code> : autre VIP et autre LB-IPAM, sans recouvrir <code>.210</code>–<code>.212</code>.</p>
+        </div>
+
+        <h3>Routes et NAT (avant le premier boot Talos)</h3>
+        <p>Session console Proxmox ou Tailscale — pas seulement SSH sur l’IP <code>eno1</code> (le NAT peut vous couper).</p>
+<pre><code>for i in $(seq 180 220); do
+  ip route replace 192.168.0.$i/32 dev vmbr0 src 192.168.0.254
+done
+ip route replace 192.168.0.210/32 dev vmbr0 src 192.168.0.254
+ip route replace 192.168.0.211/32 dev vmbr0 src 192.168.0.254
+ip route replace 192.168.0.212/32 dev vmbr0 src 192.168.0.254
+
+sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv4.conf.all.rp_filter=0
+sysctl -w net.ipv4.conf.vmbr0.rp_filter=0
+sysctl -w net.ipv4.conf.eno1.rp_filter=0
+
+iptables -I FORWARD 1 -i vmbr0 -o eno1 -j ACCEPT
+iptables -I FORWARD 1 -i eno1 -o vmbr0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -t nat -I POSTROUTING 1 -m iprange --src-range 192.168.0.180-192.168.0.220 \
+  -o eno1 -j SNAT --to-source 192.168.0.154
+iptables -I INPUT -i vmbr0 -p udp --dport 53 -j ACCEPT
+iptables -I INPUT -i vmbr0 -p udp --dport 67 -j ACCEPT
+
+ip route get 192.168.0.200
+# attendu : dev vmbr0 src 192.168.0.254
+</code></pre>
+        <div class="warn">Ne pas NAT <code>192.168.0.180/27</code> : iptables aligne sur <code>192.168.0.160/27</code> et <strong>exclut</strong> <code>.200</code>. Utiliser <code>/32</code> ou <code>iprange</code>. Ces règles disparaissent au reboot hôte.</div>
+        <p>Contrôle : <code>tcpdump -n -i eno1 host 1.1.1.1</code> pendant un ping VM → source <code>192.168.0.154</code>, pas <code>.200</code>.</p>
+
+        <h3>DHCP (Kea ou dnsmasq)</h3>
+        <p>Écoute sur le pont. Passerelle annoncée = IP de l’hôte <strong>sur le pont</strong>, pas la GW du LAN physique (injoignable depuis le pont isolé).</p>
+<pre><code>sudo apt update &amp;&amp; sudo apt install -y kea-dhcp4-server
+# /etc/kea/kea-dhcp4.conf — interfaces: vmbr0
+# subnet 192.168.0.0/24
+# pool 192.168.0.180 - 192.168.0.220
+# routers + domain-name-servers = 192.168.0.254
+sudo systemctl enable --now kea-dhcp4-server
+</code></pre>
+        <p>Le lab d’octobre a aussi marché avec <strong>dnsmasq</strong> : <code>interface=vmbr0</code>, <code>dhcp-range=192.168.0.180,192.168.0.220</code>, <code>dhcp-option=option:router,192.168.0.254</code>. Kea ne corrige pas le routage : si <code>ip route get .200</code> sort par <code>eno1</code>, Offer jamais vu sur le pont.</p>
+<pre><code>tcpdump -n -i vmbr0 port 67 or port 68
+# Discover MAC VM, puis Offer depuis 192.168.0.254
+</code></pre>
+      </section>
+
+      <section id="hub-prereq" class="section">
+        <h2>Hub — prérequis hôte et Proxmox</h2>
+        <p>From scratch sur l’hôte d’IaC, <strong>en root</strong>, avant <code>make apply</code>. Même utilisateur Unix pour <code>plan</code> et <code>apply</code> (lock <code>/tmp/terraform-provider-proxmox-id-gen.lock</code>).</p>
+        <table>
+          <tr><th>Outil</th><th>Rôle</th></tr>
+          <tr><td>Terraform ≥ 1.6</td><td>VM, Talos, Flux</td></tr>
+          <tr><td>make, yq <strong>mikefarah v4</strong>, jq, python3</td><td>Makefile / schéma (pas le yq Python)</td></tr>
+          <tr><td>flux CLI, kubectl, talosctl</td><td>talosctl aligné Talos v1.13.7</td></tr>
+          <tr><td>sshpass</td><td>Test mot de passe SSH provider seulement</td></tr>
+        </table>
+<pre><code>sudo apt update &amp;&amp; sudo apt install -y wget gnupg lsb-release curl jq python3 make unzip
+
+wget -O- https://apt.releases.hashicorp.com/gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+  | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update &amp;&amp; sudo apt install -y terraform
+terraform version
+
+curl -s https://fluxcd.io/install.sh | sudo bash
+curl -sL https://talos.dev/install | sh
+curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+</code></pre>
+
+        <h3>Proxmox</h3>
+        <div class="ctx">
+          <strong>Contexte actuel</strong> — nœud <code>monproxmox</code>, UI <code>https://192.168.0.154:8006</code>, datastore <code>local</code> (pas de <code>local-lvm</code>).
+        </div>
+<pre><code>pvesm set local --content iso,vztmpl,backup,snippets,images,rootdir
+
+pveum user token add terraform-toolkit@pve 'mojaloop-token' --privsep 0
+pveum aclmod / -user terraform-toolkit@pve -role Administrator
+</code></pre>
+        <p>Le provider importe disques / snippets en <strong>SSH mot de passe</strong> (<code>agent = false</code>), utilisateur capable de <code>qm</code> (root). Si <code>sshd</code> a <code>AllowGroups mojaloop</code> :</p>
+<pre><code>usermod -aG mojaloop root
+sshd -T | grep allowgroups
+getent group mojaloop
+</code></pre>
+      </section>
+
+      <section id="hub-env" class="section">
+        <h2>Hub — dépôts et environnements</h2>
+        <p>Le clone toolkit reste intact. Config et artefacts <strong>à côté</strong>, jamais dans le clone.</p>
+<pre><code>/opt/mojaloop/ml-deploymnt-toolkit/   # clone (orthographe du chemin lab)
+/opt/mojaloop/environments/ml-cc/
+/opt/mojaloop/environments/ml-test/
+/opt/mojaloop/artifacts/ml-cc/
+</code></pre>
+<pre><code>git clone &lt;url&gt; /opt/mojaloop/ml-deploymnt-toolkit
+git config --global --add safe.directory /opt/mojaloop/ml-deploymnt-toolkit
+cd /opt/mojaloop/ml-deploymnt-toolkit
+export DTK_DEV_ALLOW_UNTAGGED=1   # seulement hors tag de release
+</code></pre>
+
+        <h3><code>.env</code> (ne pas committer)</h3>
+<pre><code>PROXMOX_VE_ENDPOINT="https://192.168.0.154:8006"
+PROXMOX_VE_API_TOKEN="terraform-toolkit@pve!mojaloop-token=&lt;secret&gt;"
+PROXMOX_VE_SSH_USERNAME="root"
+PROXMOX_VE_SSH_PASSWORD='&lt;mot de passe root&gt;'
+PROXMOX_VE_INSECURE="true"
+CLOUDFLARE_API_TOKEN="&lt;token zone&gt;"
+OCI_REPO_USERNAME="&lt;github&gt;"
+OCI_REPO_PASSWORD="&lt;PAT read:packages&gt;"
+</code></pre>
+        <p>Guillemets simples si le mot de passe contient <code>$</code> ou <code>!</code>. <code>MINIO_ROOT_PASSWORD</code> / Harbor / Grafana : <strong>générés</strong> par Terraform — les poser dans <code>.env</code> les écrase. Après apply : <code>make secrets ENV=ml-cc</code>. MySQL / Mongo / Kratos inutiles sur un cluster <code>tooling</code>.</p>
+
+        <h3><code>config.yaml</code> (forme lab)</h3>
+<pre><code>version: 1
+cluster:
+  name: "ml-cc"
+  role: "tooling"
+  vip: "192.168.0.210"
+  lb_ipam:
+    pools:
+      gw-int:
+        lan: "192.168.0.211"
+      gw-ext:
+        lan: "192.168.0.212"
+        wan: "41.214.65.90"    # omis ⇒ DNS = lan
+template: "dev"
+infra:
+  provider: "proxmox"
+dns:
+  provider: "cloudflare"
+  domain: "openmfi.org"
+cert:
+  email: "ops@example.com"
+  server: "https://acme-v02.api.letsencrypt.org/directory"
+artifact:
+  url: "oci://ghcr.io/mojaloop/ml-deployment-toolkit"
+  version: "v0.19.0"
+registry:
+  enabled: false
+object_storage:
+  enabled: false
+observability:
+  enabled: false
+</code></pre>
+        <p><code>wan</code> = adresse que le bordure présente sur Internet (DNAT 1:1 ou reverse-proxy SNI). Cloudflare ne proxifie pas une IP privée (« reserved IP »).</p>
+        <div class="note">Le schéma officiel du toolkit peut nommer le rôle <code>cc</code>. Ce lab a validé <code>role: "tooling"</code> avec l’artefact <code>v0.19.0</code>. Ne pas mélanger sans relire le schéma du clone.</div>
+
+        <h3>Fichiers à côté</h3>
+        <p><code>placement.yaml</code> : groupe du template <code>dev</code> → nom <strong>exact</strong> du nœud Proxmox.</p>
+<pre><code># proxmox/proxmox.yaml
+version: 1
+network_bridge: "vmbr0"
+storage:
+  disks: "local"
+  images: "local"
+  snippets: "local"
+</code></pre>
+        <p><code>talos.yaml</code> : résolveur = IP pont (ici <code>192.168.0.254</code>). Kea/dnsmasq ne remplace pas cette valeur dans la machine config.</p>
+
+        <h3><code>ml-test</code></h3>
+        <ul class="check">
+          <li>Autre répertoire <code>environments/ml-test/</code>, <code>ENV=ml-test</code>.</li>
+          <li><code>cluster.name: ml-test</code>, VIP / <code>lan</code> libres.</li>
+          <li><code>dns.domain</code> <strong>différent</strong> (<code>test.openmfi.org</code> ou autre zone).</li>
+          <li><code>gw-ext.wan</code> peut être la <strong>même</strong> IP publique. Interdit : deux external-dns <code>sync</code> sur les <em>mêmes noms</em>.</li>
+        </ul>
+        <p>Si <code>ml-cc</code> a effacé des records d’une instance déjà en service :</p>
+<pre><code>kubectl -n external-dns rollout restart deploy/external-dns-external-dns
+</code></pre>
+      </section>
+
+      <section id="hub-deploy" class="section">
+        <h2>Hub — déploiement Flux</h2>
+<pre><code>cd /opt/mojaloop/ml-deploymnt-toolkit
+export DTK_DEV_ALLOW_UNTAGGED=1
+make validate ENV=ml-cc
+make plan ENV=ml-cc
+make apply ENV=ml-cc
+</code></pre>
+        <p>Dans le plan : nœud Proxmox exact, disques <code>local</code>, VIP, <code>GW_EXT_DNS_TARGET</code> = <code>wan</code>.</p>
+        <p>Déroulement : secrets Talos → snippets → image <code>talos-v1.13.7</code> → VM → bootstrap etcd → kubeconfig → Flux → Kustomizations. Le premier Helm <code>flux-operator</code> peut expirer (pull lent, taint control-plane) alors que le pod est Running : <code>make plan &amp;&amp; make apply</code> une seconde fois. Ne pas relancer <code>make apply</code> seul (plan périmé).</p>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig
+flux get kustomizations -A
+kubectl get pods -A
+</code></pre>
+        <p>Ordre Flux : <code>platform</code> → <code>dns</code> → <code>platform-config</code> → <code>talos</code> → <code>tooling</code> → <code>tooling-config</code> → routes / observabilité. <code>READY False</code> + <code>dependency … is not ready</code> = attente normale.</p>
+        <p>Console Talos : IPv4 dans le pool DHCP, GW pont, <code>CONNECTIVITY OK</code>. <code>STAGE: Booting</code> tant que Terraform n’a pas lancé <code>talosctl bootstrap</code>.</p>
+        <p>Destruction : <code>make destroy-fast ENV=ml-cc</code> en root depuis le clone. Si l’API est morte, retirer à la main les records Cloudflare <em>de ce</em> cluster seulement.</p>
+      </section>
+
+      <section id="hub-dns" class="section">
+        <h2>Hub — DNS, interfaces, pannes</h2>
+        <ol class="steps">
+          <li>Zone déléguée au provider DNS (lab : Cloudflare <code>openmfi.org</code>).</li>
+          <li>Jeton édition DNS dans <code>CLOUDFLARE_API_TOKEN</code>.</li>
+          <li>Ne pas réutiliser les noms d’un autre cluster.</li>
+        </ol>
+        <p>external-dns crée un A (+ TXT <code>a-&lt;nom&gt;</code>) <strong>par HTTPRoute</strong>. Annotation Gateway seule ≠ record. <code>policy: sync</code> supprime un nom qui disparaît des routes.</p>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig
+kubectl -n platform-system get gateway gw-ext -o yaml | grep target
+kubectl -n platform-system get gateway gw-int -o yaml | grep target
+kubectl -n external-dns logs deploy/external-dns-external-dns --tail=40
+# gw-ext → 41.214.65.90   gw-int → 192.168.0.211
+</code></pre>
+
+        <h3>Interfaces (HTTPRoutes prêtes)</h3>
+        <table>
+          <tr><th>Noms</th><th>Gateway</th><th>DNS lab</th></tr>
+          <tr><td><code>grafana.int</code>, <code>harbor.int</code>, <code>minio.int</code>, <code>vault.int</code>, <code>s3.int</code></td><td><code>gw-int</code></td><td><code>192.168.0.211</code></td></tr>
+          <tr><td><code>loki.ext</code>, <code>tempo.ext</code>, <code>thanos.ext</code></td><td><code>gw-ext</code></td><td><code>41.214.65.90</code></td></tr>
+        </table>
+        <p>Mots de passe : <code>make secrets ENV=ml-cc</code> (Grafana / Harbor <code>admin</code>, MinIO <code>minioadmin</code>).</p>
+
+        <h3>Override MinIO (image quay.io 401)</h3>
+        <p><code>quay.io/minio/minio</code> communautaire retirée → <code>tooling-config</code> bloqué, Harbor aussi. Fichier d’environnement, pas un fork : <code>environments/ml-cc/values/minio/minio.yaml</code></p>
+<pre><code>image:
+  repository: cgr.dev/chainguard/minio
+  tag: latest
+mcImage:
+  repository: cgr.dev/chainguard/minio-client
+  tag: latest-dev
+securityContext:
+  enabled: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+</code></pre>
+<pre><code>make apply-config ENV=ml-cc
+</code></pre>
+        <p><code>latest-dev</code> sur le client : le Job <code>minio-post-job</code> appelle <code>/bin/sh</code> (absent de l’image distroless).</p>
+
+        <h3>Pannes rencontrées</h3>
+        <table>
+          <tr><th>Symptôme</th><th>Cause</th><th>Action</th></tr>
+          <tr><td><code>Datastore.Allocate</code> 403</td><td>Jeton sans droit storage</td><td>ACL admin ou <code>PVEDatastoreAdmin</code> sur <code>/storage/local</code></td></tr>
+          <tr><td>SSH <code>Permission denied</code> <code>[none password]</code></td><td>MDP ou <code>AllowGroups</code></td><td><code>usermod -aG mojaloop root</code></td></tr>
+          <tr><td><code>ipcc_send_rec</code></td><td>SSH non root</td><td><code>PROXMOX_VE_SSH_USERNAME=root</code></td></tr>
+          <tr><td>Discover sans Offer</td><td>Route /24 via NIC</td><td>Routes <code>/32</code> via pont</td></tr>
+          <tr><td>NTP / discovery timeout, IP OK</td><td>SNAT mauvais préfixe</td><td>FORWARD + <code>iprange</code></td></tr>
+          <tr><td><code>index()</code> liste vide</td><td>Pas d’IPv4 <code>eth0</code></td><td>DHCP d’abord, puis <code>plan &amp;&amp; apply</code></td></tr>
+          <tr><td><code>variable not set: domain</code></td><td>Artefact OCI vs ConfigMap <code>DOMAIN</code></td><td>Artefact du même commit que le clone</td></tr>
+          <tr><td>MinIO 401 quay.io</td><td>Image retirée</td><td>Override Chainguard</td></tr>
+          <tr><td>external-dns efface la zone</td><td><code>sync</code> + même zone</td><td>Zone dédiée ; restart l’autre instance</td></tr>
+          <tr><td><code>destroy</code> <code>no route to host</code> VIP</td><td>VM déjà coupée</td><td><code>state rm</code> K8s puis destroy</td></tr>
+          <tr><td>VM déjà <code>qm destroy</code></td><td>State vs <code>100.conf</code></td><td><code>terraform state rm</code> VM, <code>destroy-fast</code></td></tr>
+        </table>
+
+        <h3>Checklist</h3>
+        <ul class="check">
+          <li><code>ip route get 192.168.0.200</code> → <code>dev vmbr0</code></li>
+          <li>DHCP : pool, routeur et DNS pont ; VIP et LB exclus</li>
+          <li>SNAT VM → IP NIC ; FORWARD pont ↔ NIC</li>
+          <li>Stockage <code>local</code> : snippets + images</li>
+          <li>SSH root dans le groupe autorisé ; un seul user Terraform</li>
+          <li><code>wan</code> = IP publique ; <code>dns.domain</code> libre</li>
+          <li><code>placement.yaml</code> = nom de nœud exact</li>
+          <li>Annotation <code>gw-ext</code> = public, <code>gw-int</code> = LAN</li>
+          <li><code>ml-test</code> : autres IP, autre nom DNS</li>
+        </ul>
       </section>
 
       <section id="valeur" class="section">
@@ -189,7 +504,7 @@
 
       <section id="mono-prerequis" class="section">
         <h2>Prérequis — SDK 1:1 from scratch</h2>
-        <p>Rien n’est installé sur le nœud ; le DFSP n’existe pas encore au Hub. Le switch Mojaloop (ALS, quoting, ledger, MCM, Hydra) est une <strong>dépendance</strong> — son install n’est pas cette procédure.</p>
+        <p>Rien n’est installé sur le nœud ; le DFSP n’existe pas encore au Hub. Le switch (ALS, quoting, ledger, MCM, Hydra) doit déjà tourner — voir <a href="#hub">Hub — architecture ml-cc</a>.</p>
 
         <h3>A. Nœud Linux</h3>
         <ul class="check">
@@ -1058,6 +1373,9 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         </div>
         <table>
           <tr><th>Rôle</th><th>Adresse</th></tr>
+          <tr><td>gw-int (*.int)</td><td><code>192.168.0.211</code></td></tr>
+          <tr><td>gw-ext wan (*.ext)</td><td><code>41.214.65.90</code></td></tr>
+          <tr><td>VIP API K8s ml-cc</td><td><code>192.168.0.210</code></td></tr>
           <tr><td>Documentation publique</td><td><code>https://docs.ext.openmfi.org/documentation</code></td></tr>
           <tr><td>Documentation VM (LAN)</td><td><code>http://172.25.2.117/documentation</code></td></tr>
           <tr><td>WAF public</td><td><code>41.214.65.90:443</code></td></tr>
