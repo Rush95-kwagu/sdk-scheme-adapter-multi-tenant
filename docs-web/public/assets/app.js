@@ -9,6 +9,9 @@
   const toggle = document.getElementById("nav-toggle");
   const backdrop = document.getElementById("backdrop");
   const pagehead = document.querySelector(".pagehead");
+  const tocNav = document.getElementById("page-toc-nav");
+  const tocRoot = document.getElementById("page-toc");
+  let tocObserver = null;
 
   function closeNav() {
     nav.classList.remove("open");
@@ -20,6 +23,131 @@
     nav.classList.add("open");
     backdrop.classList.add("show");
     if (toggle) toggle.setAttribute("aria-expanded", "true");
+  }
+
+  function slugify(text) {
+    return text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "titre";
+  }
+
+  function headingLabel(el) {
+    return (el.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  function tocHeadings(section) {
+    return Array.from(section.querySelectorAll("h2, h3, h4")).filter((h) => {
+      if (h.closest(".card")) return false;
+      if (h.closest(".page-toc")) return false;
+      return true;
+    });
+  }
+
+  function ensureHeadingIds(section) {
+    const used = new Set();
+    tocHeadings(section).forEach((h, i) => {
+      if (h.id && h.id !== section.id) {
+        used.add(h.id);
+        return;
+      }
+      let base = section.id + "--" + slugify(headingLabel(h) || "s" + (i + 1));
+      let id = base;
+      let n = 2;
+      while (used.has(id) || document.getElementById(id)) {
+        id = base + "-" + n;
+        n += 1;
+      }
+      h.id = id;
+      used.add(id);
+    });
+  }
+
+  function buildToc(section) {
+    if (!tocNav) return;
+    tocNav.innerHTML = "";
+    const heads = tocHeadings(section);
+    const firstH2 = heads.find((h) => h.tagName === "H2");
+    const rest = heads.filter((h) => h !== firstH2);
+    const items = rest.length ? rest : heads;
+    if (!items.length) {
+      const p = document.createElement("p");
+      p.className = "toc-empty";
+      p.textContent = "Pas de sous-rubrique.";
+      tocNav.appendChild(p);
+      if (tocRoot) tocRoot.hidden = false;
+      return;
+    }
+    let major = 0;
+    let minor = 0;
+    items.forEach((h) => {
+      const a = document.createElement("a");
+      a.href = "#" + h.id;
+      if (h.tagName === "H2" || h.tagName === "H3") {
+        major += 1;
+        minor = 0;
+        a.dataset.level = "1";
+      } else {
+        minor += 1;
+        a.dataset.level = "2";
+        a.classList.add("sub");
+      }
+      const num = document.createElement("span");
+      num.className = "n";
+      num.textContent = a.dataset.level === "2" ? major + "." + minor : major + ".";
+      const t = document.createElement("span");
+      t.className = "t";
+      t.textContent = headingLabel(h);
+      a.appendChild(num);
+      a.appendChild(t);
+      tocNav.appendChild(a);
+    });
+    if (tocRoot) tocRoot.hidden = false;
+    observeToc(items);
+  }
+
+  function setTocActive(id) {
+    if (!tocNav) return;
+    tocNav.querySelectorAll("a").forEach((a) => {
+      a.classList.toggle("active", a.getAttribute("href") === "#" + id);
+    });
+  }
+
+  function observeToc(heads) {
+    if (tocObserver) tocObserver.disconnect();
+    if (!heads.length) return;
+    tocObserver = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setTocActive(visible[0].target.id);
+      },
+      { rootMargin: "-18% 0px -70% 0px", threshold: [0, 1] }
+    );
+    heads.forEach((h) => tocObserver.observe(h));
+    setTocActive(heads[0].id);
+  }
+
+  function resolveHash(hash) {
+    const raw = (hash || "").replace(/^#/, "") || "accueil";
+    const el = document.getElementById(raw);
+    if (el && el.classList.contains("section")) {
+      return { section: raw, heading: null };
+    }
+    if (el) {
+      const sec = el.closest(".section");
+      if (sec) return { section: sec.id, heading: el };
+    }
+    const dash = raw.indexOf("--");
+    if (dash > 0) {
+      const maybe = raw.slice(0, dash);
+      if (document.getElementById(maybe)) return { section: maybe, heading: el };
+    }
+    return { section: "accueil", heading: null };
   }
 
   function pageOf(id) {
@@ -34,7 +162,7 @@
     };
   }
 
-  function show(id) {
+  function show(id, headingEl) {
     const target = (id || "").replace(/^#/, "") || "accueil";
     sections.forEach((s) => s.classList.toggle("visible", s.id === target));
     links.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + target));
@@ -59,8 +187,20 @@
           '<span class="dir">Suivant</span>' + (next ? next.textContent.trim() : "") +
         "</a>";
     }
-    window.scrollTo(0, 0);
+    const section = document.getElementById(target);
+    if (section) {
+      ensureHeadingIds(section);
+      buildToc(section);
+    }
     closeNav();
+    if (headingEl) {
+      requestAnimationFrame(() => {
+        headingEl.scrollIntoView({ block: "start" });
+        setTocActive(headingEl.id);
+      });
+    } else {
+      window.scrollTo(0, 0);
+    }
   }
 
   links.forEach((a) => {
@@ -80,13 +220,24 @@
     const href = a.getAttribute("href");
     if (!href || href === "#") return;
     const dest = document.getElementById(href.slice(1));
-    if (!dest || !dest.classList.contains("section")) return;
+    if (!dest) return;
+    if (dest.classList.contains("section")) {
+      e.preventDefault();
+      history.replaceState(null, "", href);
+      show(href);
+      return;
+    }
+    const sec = dest.closest(".section");
+    if (!sec) return;
     e.preventDefault();
     history.replaceState(null, "", href);
-    show(href);
+    show(sec.id, dest);
   });
 
-  window.addEventListener("hashchange", () => show(location.hash));
+  window.addEventListener("hashchange", () => {
+    const r = resolveHash(location.hash);
+    show(r.section, r.heading);
+  });
 
   if (search) {
     const filter = () => {
@@ -153,5 +304,6 @@
     if (pagehead) pagehead.classList.toggle("is-stuck", window.scrollY > 8);
   }, { passive: true });
 
-  show(location.hash || "#accueil");
+  const initial = resolveHash(location.hash || "#accueil");
+  show(initial.section, initial.heading);
 })();
