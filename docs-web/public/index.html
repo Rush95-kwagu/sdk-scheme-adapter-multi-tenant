@@ -37,6 +37,7 @@
           <a class="item" href="#hub-env">Environnements</a>
           <a class="item" href="#hub-deploy">Déploiement Flux</a>
           <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
+          <a class="item" href="#hub-purge">Purge DFSP (ledger)</a>
         </details>
         <details class="nav-group" open>
           <summary>SDK 1:1</summary>
@@ -98,7 +99,7 @@
         <div class="cards three">
           <div class="card">
             <h3>Hub Mojaloop</h3>
-            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Voir <a href="#hub">Architecture ml-cc</a>.</p>
+            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Retrait d’un participant : <a href="#hub-purge">purge ledger</a>.</p>
           </div>
           <div class="card">
             <h3>SDK 1:1 (défaut toolkit)</h3>
@@ -419,6 +420,69 @@ securityContext:
           <li>Annotation <code>gw-ext</code> = public, <code>gw-int</code> = LAN</li>
           <li><code>ml-test</code> : autres IP, autre nom DNS</li>
         </ul>
+      </section>
+
+      <section id="hub-purge" class="section">
+        <div class="badges">
+          <span class="badge high">irréversible</span>
+          <span class="badge">dry-run par défaut</span>
+        </div>
+        <h2>Hub — purge d’un DFSP</h2>
+        <p class="lead">Script <code>scripts/hub/mojaloop-purge-dfsp.sh</code> : retire un participant du <strong>switch</strong> (ledger, quotes, settlements, oracles). Il ne touche ni au nœud SDK, ni à MCM / Hydra / Vault. Markdown : <code>docs/adopter/mojaloop-purge-dfsp.md</code>.</p>
+        <div class="warn">
+          <strong>Dry-run d’abord</strong>
+          Sans <code>--execute</code>, tout passe dans une transaction MySQL puis <code>ROLLBACK</code>. Le Hub (<code>participantId</code> 1) est protégé. Confirmation à l’exécution : taper <code>SUPPRIMER</code>.
+        </div>
+        <h3>Ce qui est supprimé</h3>
+        <table>
+          <tr><th>Store</th><th>Périmètre</th></tr>
+          <tr><td><code>central_ledger</code></td><td>Participant, comptes, positions, limites, endpoints, tokens, parties, proxy ; transferts / FX / bulk ; quotes ; settlement</td></tr>
+          <tr><td>Oracles</td><td><code>oracle_msisdn</code>, <code>oracle_alias</code> (sauf <code>--skip-oracle</code>)</td></tr>
+          <tr><td>Redis <code>--redis</code></td><td>Clés <code>ttk-redis</code> contenant le nom du DFSP</td></tr>
+          <tr><td>Mongo <code>--mongo-purge</code></td><td>Vidage <strong>global</strong> de <code>mlos</code>, <code>ttk</code>, <code>reporting_events</code></td></tr>
+          <tr><td>Kafka <code>--kafka-purge</code></td><td>Topics Strimzi <code>^topic-</code> (pas par DFSP)</td></tr>
+        </table>
+        <p>Cible lab : namespace <code>mojaloop</code> (Deployments), <code>data</code> (PXC <code>mojaloop-db-pxc-0</code> / conteneur <code>pxc</code>). Mot de passe root : secret <code>data/mojaloop-db-secrets</code>, clé <code>root</code>. Chart Mojaloop 17.2.0 / central-ledger v19.12.7.</p>
+        <h3>Prérequis</h3>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
+# pas le kubeconfig ml-cc
+chmod +x scripts/hub/mojaloop-purge-dfsp.sh
+</code></pre>
+        <h3>Commandes</h3>
+<pre><code># Simulation (défaut)
+./scripts/hub/mojaloop-purge-dfsp.sh cmcalavi
+
+# Appliquer : switch à 0 réplique pendant la purge
+./scripts/hub/mojaloop-purge-dfsp.sh --execute --scale-down cmcalavi
+
+# Plusieurs noms, dump SQL, restart après coup
+./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge.sql \
+  --execute --restart gto moov-test
+</code></pre>
+        <table>
+          <tr><th>Option</th><th>Effet</th></tr>
+          <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>
+          <tr><td><code>--execute</code></td><td>COMMIT après un dry-run rejoué</td></tr>
+          <tr><td><code>-y</code></td><td>Pas de prompt <code>SUPPRIMER</code></td></tr>
+          <tr><td><code>--no-backup</code></td><td>Pas de mysqldump (défaut : <code>./mojaloop-backups</code>)</td></tr>
+          <tr><td><code>--allow-inflight</code></td><td>Autoriser malgré des transferts non finalisés</td></tr>
+          <tr><td><code>--scale-down</code> / <code>--restart</code></td><td>Arrêt / redémarrage des Deployments du switch</td></tr>
+        </table>
+        <div class="note">
+          <strong>Transferts ouverts</strong>
+          S’il reste des états <code>RESERVED</code> / <code>RECEIVED_*</code>, <code>--execute</code> est refusé sauf <code>--allow-inflight</code> (alors <code>reservedValue</code> des survivants n’est pas recalculé). Préférer <code>--scale-down</code> et attendre la finalisation.
+        </div>
+        <h3>Hors script</h3>
+        <ul class="check">
+          <li>Client Hydra, enregistrement MCM, CA / certs Vault du DFSP.</li>
+          <li>Stack SDK 1:1 (<code>manage.sh down</code>) ou détachement overlay (<code>docker stop mcm-agent-…</code> puis <code>just build</code>).</li>
+          <li>WAF / DNS du FQDN DFSP.</li>
+          <li>Si aucune fenêtre settlement <code>OPEN</code> : le hub refuse les transferts jusqu’à réouverture.</li>
+        </ul>
+        <div class="ctx">
+          <strong>Contexte actuel — lab</strong>
+          Cluster switch <code>ml-test</code>, VIP API <code>172.16.2.25</code>. Lancer le script depuis une machine qui a <code>kubectl</code> vers ce cluster (hôte Proxmox / bastion), pas depuis le seul nœud SDK.
+        </div>
       </section>
 
       <section id="valeur" class="section">
@@ -1375,6 +1439,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
 # 4. CBS : reverting l’URL outbound vers :&lt;PORT_OUTBOUND_ANCIEN&gt;
 </code></pre>
         <p>Vault du DFSP reste up. L’agent n’est arrêté que le temps du <code>just build</code> de détachement, puis relancé pour le SDK 1:1.</p>
+        <p>Pour retirer le DFSP du <strong>ledger Hub</strong> (pas du SDK) : <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh</code></a> en dry-run puis <code>--execute</code>. MCM / Hydra / Vault restent.</p>
 
         <div class="ctx">
           <strong>Contexte actuel exemple moov-test</strong>
@@ -1843,6 +1908,11 @@ just logs moov          # SDK 1:1 (alias : just logs calavi → cmcalavi)
 just logs-mcm moov-test # logs mcm-agent-moov-test
 just ps                 # sdk-scheme-adapter-*
 # overlay ailleurs : OVERLAY_DIR=/chemin just build
+
+# Hub — retirer un DFSP du ledger (dry-run, puis --execute)
+# scripts/hub/mojaloop-purge-dfsp.sh  →  docs #hub-purge
+export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
+./scripts/hub/mojaloop-purge-dfsp.sh cmcalavi
 </code></pre>
         <h3>Publier cette doc sur la VM</h3>
 <pre><code>cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant/docs-web
