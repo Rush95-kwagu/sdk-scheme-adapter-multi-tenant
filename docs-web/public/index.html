@@ -59,7 +59,10 @@
           <a class="item" href="#risques-eleve">Élevé</a>
           <a class="item" href="#risques-moyen">Moyen</a>
           <a class="item" href="#risques-faible">Faible</a>
-          <a class="item" href="#risques-ops">Runbook et durcissement</a>
+          <a class="item" href="#risques-ops">Runbook overlay</a>
+          <a class="item" href="#risques-mono">SDK 1:1 — inventaire</a>
+          <a class="item" href="#risques-mono-failles">SDK 1:1 — failles</a>
+          <a class="item" href="#risques-mono-ops">SDK 1:1 — runbook</a>
         </details>
         <details class="nav-group" open>
           <summary>Référence</summary>
@@ -1432,7 +1435,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <strong>Validé le 15 oct. 2026</strong>
           WAF mTLS avec CA DFSP : <code>ssl-client-verify: SUCCESS</code>. Transfert cmcalavi → moov OK. Overlay 8 tenants. Vault unsealed, leader <code>vault-1</code>. MCM <code>/dfsps/jwscerts</code> 200. Cela n’annule pas E1–E11.
         </div>
-        <p>Source markdown : <code>contrib/sdk-scheme-adapter-multi-tenant/RISQUES-TRANSFERTS.md</code>.</p>
+        <p>Source markdown overlay : <code>RISQUES-TRANSFERTS.md</code>. SDK 1:1 encore en service : <a href="#risques-mono">inventaire et failles</a> (<code>RISQUES-SDK-MONO.md</code>).</p>
       </section>
 
       <section id="risques-eleve" class="section">
@@ -1588,6 +1591,109 @@ for n in gto cmcalavi moov mtn; do
     -o jsonpath='{.data.ca\.crt}' | base64 -d &gt; "$HOME/dfsp-ca/${n}-ca.pem"
 done
 </code></pre>
+      </section>
+
+      <section id="risques-mono" class="section">
+        <div class="badges">
+          <span class="badge">1:1 live</span>
+          <span class="badge high">docker ps 15 oct.</span>
+        </div>
+        <h2>SDK mono-tenant — inventaire</h2>
+        <p class="lead">Stacks Compose encore <strong>up</strong> à côté de l’overlay. Image <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>. Les flags (<code>JWS_SIGN=false</code>, <code>NODE_TLS=0</code>) sont ceux des <em>exemples</em> toolkit — confirmer avec <code>docker inspect</code> (runbook).</p>
+        <div class="warn">
+          <strong>Double rattachement</strong>
+          <code>just build</code> a branché <strong>tous</strong> les <code>mcm-agent-*</code> sur <code>sdk-fececam</code>. Moov et clcam ont donc un agent qui parle à <strong>deux</strong> SDK, alors que le WAF inbound reste sur les ports 1:1.
+        </div>
+        <h3>SDK 1:1 up</h3>
+        <table>
+          <tr><th>Conteneur</th><th>In / out / metrics</th><th>WAF</th><th>Up</th></tr>
+          <tr><td><code>sdk-scheme-adapter-moov</code></td><td>6000 / 6001 / <strong>0.0.0.0:6040</strong></td><td><code>moov.ext</code> → 6000</td><td>~3 sem.</td></tr>
+          <tr><td><code>…-clcam-jardin</code></td><td>8000 / 8001 / 8040</td><td><code>clcam-jardin.ext</code> → 8000</td><td>~2 sem.</td></tr>
+          <tr><td><code>…-clcam-calavi</code></td><td>9000 / 9001 / 9040</td><td><code>clcam-calavi.ext</code> → 9000</td><td>~2 sem.</td></tr>
+          <tr><td><code>…-clcam-calavi-test</code></td><td>10000 / 10001 / 10040</td><td>test → 10000</td><td>~7 j</td></tr>
+          <tr><td><code>…-clcam-jardins-test</code></td><td>10100 / 10101 / 10140</td><td>test → 10100</td><td>~2 sem.</td></tr>
+        </table>
+        <p>Chaque stack : <code>mcm-agent-*</code> (healthy, <strong>Up 2 hours</strong> — même restart que l’overlay), Vault 1.20, Redis <strong>bitnami</strong>.</p>
+        <h3>Agent sans SDK 1:1 (cutover overlay)</h3>
+        <table>
+          <tr><th>Agent</th><th>MCM UI</th><th>SDK 1:1</th><th>WAF inbound</th></tr>
+          <tr><td><code>mcm-agent-gto</code></td><td>:5003</td><td>absent</td><td>→ <strong>11000</strong> overlay</td></tr>
+          <tr><td><code>mcm-agent-cmcalavi</code></td><td>:3000</td><td>absent</td><td>→ 11000</td></tr>
+          <tr><td><code>mcm-agent-moov-test</code></td><td>:10203</td><td>absent</td><td>→ 11000</td></tr>
+        </table>
+        <div class="ctx">
+          <strong>Trous</strong>
+          Pas de <code>sdk-scheme-adapter-mtn</code> alors que le WAF <code>mtn.ext</code> proxy <code>:7000</code>. Overlay metrics = localhost ; 1:1 metrics = toutes interfaces.
+        </div>
+        <p>Failles classées : <a href="#risques-mono-failles">élevé / moyen / faible</a>. Actions : <a href="#risques-mono-ops">runbook</a>.</p>
+      </section>
+
+      <section id="risques-mono-failles" class="section">
+        <h2>SDK 1:1 — failles</h2>
+        <h3><span class="badge high">Élevé</span></h3>
+        <table>
+          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
+          <tr><td>S1</td><td>Agent PM4ML → overlay <strong>et</strong> SDK 1:1. WAF moov/clcam reste 1:1. CBS peut viser :6001 <em>ou</em> :11001/moov.</td><td>Un agent = un WS :4004. Exclure moov/clcam du <code>just build</code> <strong>ou</strong> cutover WAF + stop SDK 1:1. Pas les deux.</td></tr>
+          <tr><td>S2</td><td>Outbound <code>0.0.0.0:6001</code>…<code>:10101</code>, pas de clé API (SDK officiel).</td><td>nft allowlist CBS ; bind <code>127.0.0.1</code> si CBS local.</td></tr>
+          <tr><td>S3</td><td>Metrics <code>0.0.0.0:6040</code>… (overlay est <code>127.0.0.1:11040</code>).</td><td>Republish <code>127.0.0.1:6040:5040</code> (idem 80xx/90xx/10xxx).</td></tr>
+          <tr><td>S4</td><td>WAF mtn → :7000, <strong>aucun</strong> conteneur.</td><td>Remonter SDK mtn ou changer le vhost. Probe <code>/ping</code> mtn.ext.</td></tr>
+          <tr><td>S5</td><td>Exemples 1:1 : <code>JWS_SIGN</code> / <code>VALIDATE_INBOUND_JWS</code> = false. PM4ML peut réactiver — pas garanti après 500 Vault.</td><td><code>docker inspect</code> ; forcer true dans env + agent.</td></tr>
+          <tr><td>S6</td><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> agent + SDK (exemples).</td><td><code>1</code> + CA Hub. Overlay est déjà à 1.</td></tr>
+          <tr><td>S7</td><td>Vault/Redis/agent gto, cmcalavi, moov-test sans SDK 1:1. Clés toujours sur disque. CBS ancien port = mort.</td><td>Vérité = overlay. Vérifier les CBS. Backup puis ne pas laisser d’outbound fantôme.</td></tr>
+          <tr><td>S8</td><td>Tous les <code>mcm-agent-*</code> 1:1 « Up 2 hours » vs SDK « Up 3 weeks » — stampede restart.</td><td>Pas de restart 8 agents. Attendre PEER_JWS sans 500 MCM.</td></tr>
+        </table>
+        <h3><span class="badge med">Moyen</span></h3>
+        <table>
+          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
+          <tr><td>T1</td><td>Redis <code>bitnami/redis:latest</code>, pas d’AUTH.</td><td><code>redis:7-alpine</code> + mot de passe.</td></tr>
+          <tr><td>T2</td><td>8 Vaults file storage / 1 VM, pas de Raft DFSP.</td><td>Backup volumes <code>vault-data-*</code>.</td></tr>
+          <tr><td>T3</td><td>Exemples moov/gto/cmcalavi : inbound mTLS SDK <code>true</code> derrière WAF HTTP.</td><td>Inspect live (moov up 3 sem. ⇒ probablement <code>false</code>). Garder <code>false</code> ; mTLS au WAF.</td></tr>
+          <tr><td>T4</td><td>Vhosts clcam : pas de <code>ssl_verify_client</code> (pas de secret Cilium).</td><td>JWS on + allowlist IP Hub ; plus tard CA + mTLS.</td></tr>
+          <tr><td>T5</td><td>MCM UI <code>0.0.0.0:3000</code>, :5003, :6003, :8003…</td><td>Bind localhost / allow WAF seulement.</td></tr>
+          <tr><td>T6</td><td>SDK officiel v24.9.0 vs overlay local — JWS/ILP peuvent différer.</td><td>Retester payer overlay ↔ payee 1:1 après bump.</td></tr>
+          <tr><td>T7</td><td>Healthcheck = wget metrics, pas le WS PM4ML.</td><td>Ne pas faire confiance à « healthy » post-restart agent.</td></tr>
+        </table>
+        <h3><span class="badge low">Faible</span></h3>
+        <table>
+          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
+          <tr><td>U1</td><td><code>sdk-mt-docs</code> :80 sans auth.</td><td>LAN only.</td></tr>
+          <tr><td>U2</td><td><code>clcam-jardin</code> vs <code>clcam-jardins-test</code>.</td><td>Noms CBS/ALS explicites.</td></tr>
+          <tr><td>U4</td><td>Secret Cilium <code>mtn-clientcert-tls</code> sans data plane local.</td><td>S4 ou offboard Hub.</td></tr>
+        </table>
+      </section>
+
+      <section id="risques-mono-ops" class="section">
+        <h2>SDK 1:1 — runbook</h2>
+        <h3>Symptôme → action</h3>
+        <table>
+          <tr><th>Symptôme</th><th>Action</th></tr>
+          <tr><td>502 <code>mtn.ext</code></td><td>Rien sur :7000 — remonter SDK ou changer WAF</td></tr>
+          <tr><td>Timeout inbound <strong>moov</strong></td><td>WAF doit rester :6000 (prod 1:1), pas 11000</td></tr>
+          <tr><td>502 gto/cmcalavi sur ancien port 1:1</td><td>Inbound :11000, outbound CBS <code>:11001/{dfsp}</code></td></tr>
+          <tr><td><code>invalid signature</code> sur moov 1:1</td><td>Inspect JWS ; logs <code>mcm-agent-moov</code> jwscerts</td></tr>
+          <tr><td>POST :6001 depuis un laptop</td><td>Firewall S2 immédiat</td></tr>
+          <tr><td>Agent healthy, transferts stale</td><td>Un seul consumer WS (S1)</td></tr>
+        </table>
+        <h3>Ordre</h3>
+        <ol>
+          <li><strong>S2 / S3</strong> — fermer outbound + metrics (moov d’abord).</li>
+          <li><strong>S4</strong> — mtn.</li>
+          <li><strong>S1</strong> — un agent, un SDK (sortir moov/clcam de l’overlay <em>ou</em> cutover complet).</li>
+          <li><strong>S5 / S6</strong> — inspect, JWS on, <code>NODE_TLS=1</code>.</li>
+          <li><strong>S7</strong> — plus de CBS sur ports morts ; ne pas détruire le Vault dont l’agent overlay a encore besoin.</li>
+          <li><strong>T4</strong> — mTLS WAF clcam quand Cilium aura les secrets.</li>
+        </ol>
+        <h3>Inspect flags live</h3>
+<pre><code>for s in moov clcam-jardin clcam-calavi clcam-calavi-test clcam-jardins-test; do
+  echo "===== $s ====="
+  docker inspect "sdk-scheme-adapter-$s" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+    | grep -E '^(JWS_|VALIDATE_|CHECK_ILP|NODE_TLS|INBOUND_MUTUAL|OUTBOUND_MUTUAL|DFSP_ID)='
+done
+
+ss -lntp | grep -E ':(6001|7000|8001|9001|10001|10101|11001)\b'
+docker inspect sdk-fececam --format '{{range .Config.Env}}{{println .}}{{end}}' | grep MGMT_API_WS
+</code></pre>
+        <p>Markdown : <code>contrib/sdk-scheme-adapter-multi-tenant/RISQUES-SDK-MONO.md</code>. Overlay : <a href="#risques">Risques transferts</a>.</p>
       </section>
 
       <section id="ports" class="section">
