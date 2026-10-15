@@ -316,6 +316,9 @@ p { margin: 0 0 1.05rem; color: var(--ink); }
   background: var(--accent-soft);
   color: var(--accent);
 }
+.badge.high { background: #f8e4e4; color: #8b2e2e; }
+.badge.med { background: var(--warn-soft); color: var(--warn); }
+.badge.low { background: #ece8e0; color: var(--muted); }
 
 .cards {
   display: grid;

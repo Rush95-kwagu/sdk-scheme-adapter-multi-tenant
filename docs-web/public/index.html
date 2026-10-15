@@ -54,8 +54,16 @@
           <a class="item" href="#dfsp-existant">Cutover SDK dédié</a>
         </details>
         <details class="nav-group" open>
+          <summary>Risques transferts</summary>
+          <a class="item" href="#risques">Synthèse</a>
+          <a class="item" href="#risques-eleve">Élevé</a>
+          <a class="item" href="#risques-moyen">Moyen</a>
+          <a class="item" href="#risques-faible">Faible</a>
+          <a class="item" href="#risques-ops">Runbook et durcissement</a>
+        </details>
+        <details class="nav-group" open>
           <summary>Référence</summary>
-          <a class="item" href="#securite">Sécurité</a>
+          <a class="item" href="#securite">Sécurité overlay</a>
           <a class="item" href="#ports">Ports et URL</a>
         </details>
         <p class="nav-empty" id="nav-empty">Aucune page ne correspond.</p>
@@ -91,6 +99,7 @@
           </div>
         </div>
         <div class="note">URLs : <strong>https://docs.ext.openmfi.org/documentation</strong> (WAF) · <code>http://172.25.2.117/documentation</code> (VM, LAN).</div>
+        <p>Argent en jeu : un transfert vert ne suffit pas. Voir <a href="#risques">Risques transferts</a> (Hub, WAF, Vault, overlay) classés élevé / moyen / faible.</p>
       </section>
 
       <section id="hub" class="section">
@@ -1371,7 +1380,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         <table>
           <tr><th>Risque résiduel</th><th>Mesure ops</th></tr>
           <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code></td><td>Interdit hors debug CA ; remettre <code>1</code></td></tr>
-          <tr><td>WAF sans <code>ssl_verify_client</code></td><td>Installer la CA Hub, passer <code>optional</code> puis <code>on</code> sur les vhosts FSPIOP</td></tr>
+          <tr><td>WAF <code>ssl_verify_client</code></td><td>CA <strong>du DFSP</strong> (<code>ca.crt</code> Cilium), pas Hub CA. Détail : <a href="#risques-eleve">E9</a>, <a href="#risques-moyen">M2</a></td></tr>
           <tr><td>Outbound sans clé si <code>OUTBOUND_API_KEY_ENABLED=false</code></td><td>Firewall :11001 vers CBS ; passer ENABLED=true + secret + <code>X-API-Key</code> ou Bearer côté CBS</td></tr>
           <tr><td><code>X-SDK-Verbose: 1</code></td><td>Dump complet (toujours authentifié si ENABLED). Ne pas l’envoyer depuis le CBS prod</td></tr>
           <tr><td>Inbound overlay en HTTP derrière le WAF</td><td>Attendu ; ne pas ouvrir :11000 hors WAF</td></tr>
@@ -1383,6 +1392,201 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
 # iptables -A INPUT -p tcp --dport 11001 -s &lt;CBS_IP&gt; -j ACCEPT
 # iptables -A INPUT -p tcp --dport 11001 -s 127.0.0.1 -j ACCEPT
 # iptables -A INPUT -p tcp --dport 11001 -j DROP
+</code></pre>
+        <p>Registre complet (incidents 14–15 oct. 2026) : <a href="#risques">Risques transferts</a>.</p>
+      </section>
+
+      <section id="risques" class="section">
+        <div class="badges">
+          <span class="badge high">élevé</span>
+          <span class="badge med">moyen</span>
+          <span class="badge low">faible</span>
+        </div>
+        <h2>Risques — transferts d’argent</h2>
+        <p class="lead">Hub <code>ml-test</code>, WAF-AGG, nœud SDK <code>172.25.2.117</code> (<code>sdk-fececam</code> + 8 <code>mcm-agent-*</code>). Un transfert cmcalavi → moov <strong>réussi</strong> le 15 oct. 2026 ne prouve pas que les cinq couches tiennent sous attaque ou sous panne.</p>
+        <div class="ctx">
+          <strong>Cinq couches du modèle Hub</strong>
+          mTLS · JWS · ILP · whitelist IP · OAuth MCM. En overlay lab : ILP éteint, outbound sans clé, PUT /parties non validé, mTLS WAF <code>optional</code>, Vault Raft et DFSPs prod sur le même nœud que le POC.
+        </div>
+        <table>
+          <tr><th>Niveau</th><th>Sens</th></tr>
+          <tr><td><span class="badge high">Élevé</span></td><td>Perte d’argent, impersonation FSPIOP, indispo Hub/SDK, secret exposé</td></tr>
+          <tr><td><span class="badge med">Moyen</span></td><td>Incident probable, fenêtre d’attaque ou d’erreur opérateur large</td></tr>
+          <tr><td><span class="badge low">Faible</span></td><td>Observabilité, dette, durcissement</td></tr>
+        </table>
+        <div class="cards three">
+          <div class="card">
+            <h3>Élevé</h3>
+            <p>API <code>:11001</code> ouverte, <code>CHECK_ILP=false</code>, auto-accept, overlay = prod, Vault un nœud, secret Hydra, JWS parties, peer keys globales, mTLS optional, extapi 30 j. <a href="#risques-eleve">Détail</a>.</p>
+          </div>
+          <div class="card">
+            <h3>Moyen</h3>
+            <p>ALS en http, CA DFSP vs Hub CA, secrets Cilium manquants, stampede agents, whitelist 0.0.0.0/0, pas de CRL. <a href="#risques-moyen">Détail</a>.</p>
+          </div>
+          <div class="card">
+            <h3>Ops</h3>
+            <p>Matrice symptôme → action et ordre de durcissement sans recasser le lab. <a href="#risques-ops">Runbook</a>.</p>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Validé le 15 oct. 2026</strong>
+          WAF mTLS avec CA DFSP : <code>ssl-client-verify: SUCCESS</code>. Transfert cmcalavi → moov OK. Overlay 8 tenants. Vault unsealed, leader <code>vault-1</code>. MCM <code>/dfsps/jwscerts</code> 200. Cela n’annule pas E1–E11.
+        </div>
+        <p>Source markdown : <code>contrib/sdk-scheme-adapter-multi-tenant/RISQUES-TRANSFERTS.md</code>.</p>
+      </section>
+
+      <section id="risques-eleve" class="section">
+        <div class="badges"><span class="badge high">élevé</span></div>
+        <h2>Risques élevés</h2>
+        <table>
+          <tr><th>ID</th><th>Faille</th><th>Où / preuve</th><th>Remède</th></tr>
+          <tr>
+            <td>E1</td>
+            <td>API outbound sans auth</td>
+            <td><code>OUTBOUND_API_KEY_ENABLED=false</code>, ports <code>11000</code>/<code>11001</code> en 0.0.0.0. POST lab sans clé.</td>
+            <td><code>ENABLED=true</code> + secret ; bind <code>127.0.0.1:11001</code> ou allowlist CBS ; jamais le WAN.</td>
+          </tr>
+          <tr>
+            <td>E2</td>
+            <td><code>CHECK_ILP=false</code></td>
+            <td><code>lab/docker-compose.yml</code>. Fulfil sans preuve ILP.</td>
+            <td><code>CHECK_ILP=true</code> dès que le backend émet un ILP valide. Tester un fulfil altéré (doit échouer).</td>
+          </tr>
+          <tr>
+            <td>E3</td>
+            <td>Auto-accept party / quotes</td>
+            <td><code>AUTO_ACCEPT_PARTY</code> et <code>AUTO_ACCEPT_QUOTES</code> à <code>true</code>.</td>
+            <td><code>false</code> + API backend (limites, KYC, solde). <code>true</code> seulement simulateur isolé.</td>
+          </tr>
+          <tr>
+            <td>E4</td>
+            <td>Prod + lab sur un overlay</td>
+            <td>Tenants <code>moov</code>, <code>mtn</code>, <code>clcam-*</code> et lab. Un <code>docker restart sdk-fececam</code> coupe tous les callbacks.</td>
+            <td>SDK 1:1 pour la prod jusqu’à qualification ; overlay lab sur nœud séparé ; ACL + API key par tenant.</td>
+          </tr>
+          <tr>
+            <td>E5</td>
+            <td>Vault Raft 3 pods / 1 worker</td>
+            <td><code>vault-0/1/2</code> sur <code>ml-test-w-2</code>, 200+ restarts. 15 oct. : <code>8201 connection refused</code> → MCM jwscerts 500 → quotes <code>invalid signature</code>.</td>
+            <td>Anti-affinity 1 pod / nœud ; alerte leader ; runbook unseal (5/3) ; ne pas restart les 3 Vault d’un coup.</td>
+          </tr>
+          <tr>
+            <td>E6</td>
+            <td>Secret Hydra collé dans un chat</td>
+            <td>Session opérateur, <code>mcm-agent</code> moov-test.</td>
+            <td>Rotation <strong>immédiate</strong> du client Hydra. Pas de secret dans Cursor/git.</td>
+          </tr>
+          <tr>
+            <td>E7</td>
+            <td>JWS PUT /parties sauté</td>
+            <td><code>VALIDATE_INBOUND_PUT_PARTIES_JWS=false</code>. Log <code>skipping jws validation on put parties</code>.</td>
+            <td>Passer à <code>true</code> + <code>JWS_SIGN_PUT_PARTIES=true</code> chez tous les DFSPs, après alignement des peer keys.</td>
+          </tr>
+          <tr>
+            <td>E8</td>
+            <td>Peer JWS globale (dernier gagne)</td>
+            <td><code>DfspConfigStore</code> <code>Object.assign(peerJWSKeys)</code>. 8 agents overwrite <code>moov</code>.</td>
+            <td>Clés <strong>par tenant</strong> ; fingerprints dans <code>/pm4ml-tenants</code> ; alerte 500 MCM jwscerts.</td>
+          </tr>
+          <tr>
+            <td>E9</td>
+            <td>WAF <code>ssl_verify_client optional</code></td>
+            <td>Sans cert → <code>NONE</code> (accepté). Mauvais cert → 400 SSL (Hub→gto avec Hub CA au lieu de <code>gto Root CA</code>).</td>
+            <td>CA = <code>ca.crt</code> Cilium <strong>du DFSP</strong>. <code>on</code> seulement si secret Hub existe. Commenter moov-test/clcam-*. Jamais <code>openmfi-hub-ca.pem</code> sur ces vhosts.</td>
+          </tr>
+          <tr>
+            <td>E10</td>
+            <td>Cert extapi 30 j, Envoy stale</td>
+            <td>TLS expired (12 sep) alors que le Certificate K8s était Nov 2026.</td>
+            <td>Probe <code>openssl s_client</code> vs CR ; <code>rollout restart deploy/extapi-envoy</code> au renew.</td>
+          </tr>
+          <tr>
+            <td>E11</td>
+            <td>Path overlay ≠ FSPIOP-Source</td>
+            <td><code>POST /cmcalavi/transfers</code> avec <code>fspiop-source: gto</code>.</td>
+            <td>API key ; backend lié à son <code>dfspId</code> ; overlay : 400 si Source ≠ tenant du path.</td>
+          </tr>
+        </table>
+        <div class="warn">
+          <strong>E6 en premier</strong>
+          Tourner le secret Hydra s’il a été collé, avant tout autre durcissement.
+        </div>
+      </section>
+
+      <section id="risques-moyen" class="section">
+        <div class="badges"><span class="badge med">moyen</span></div>
+        <h2>Risques moyens</h2>
+        <table>
+          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
+          <tr><td>M1</td><td>ALS enregistre <code>http://</code> → 301 nginx (première jambe sans client cert).</td><td>Endpoints ledger/MCM en <code>https://</code>. Pas de redirect 80 sur FSPIOP.</td></tr>
+          <tr><td>M2</td><td>Client cert Hub signé par la CA <strong>DFSP</strong> (<code>CN=gto Root CA</code>), pas Hub CA.</td><td>Runbook WAF : extraire <code>ca.crt</code> par DFSP. Alerte notAfter &lt; 30 j.</td></tr>
+          <tr><td>M3</td><td>Pas de <code>{host}-clientcert-tls</code> pour moov-test / clcam-*.</td><td>Onboard MCM + vault-agent, puis CA WAF, puis mTLS. Checklist nouveau DFSP.</td></tr>
+          <tr><td>M4</td><td>Secret K8s à jour ≠ PEM nginx (copie manuelle).</td><td>Compte scp jump Hub → WAF ; pas de copier-coller PEM en prod.</td></tr>
+          <tr><td>M5</td><td><code>ssl_verify_client on</code> + mauvaise CA = lookup 400 (argent bloqué).</td><td>Canary <code>optional</code> → <code>on</code> DFSP par DFSP ; probe <code>GET /parties</code>.</td></tr>
+          <tr><td>M6</td><td>MCM 500 Vault : agents restent sur cache JWS stale. Stampede 8 restarts → <code>ECONNREFUSED :4004</code>.</td><td>Ordre : Vault leader → MCM 200 → overlay. Pas de restart agents en masse.</td></tr>
+          <tr><td>M7</td><td>Whitelist IP souvent <code>0.0.0.0/0</code> + mTLS optional.</td><td>Allowlist CIDR Hub egress (<code>172.16.2.254</code>) sur vhosts FSPIOP.</td></tr>
+          <tr><td>M8</td><td>FSPIOP = un facteur (cert). CRL Vault non lue par Envoy.</td><td>Rotation courte ; retirer CA du bundle + secret CEC. Ne pas compter sur la CRL.</td></tr>
+          <tr><td>M9</td><td>Agents Compose : <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code>.</td><td><code>1</code> une fois la CA Hub dans le trust store.</td></tr>
+          <tr><td>M10</td><td><code>/pm4ml-tenants</code> : mêmes <code>outboundCertBytes</code> sur 8 tenants.</td><td>Fingerprints ; alerte collision.</td></tr>
+          <tr><td>M11</td><td>API K8s <code>no route to host</code> alors que ping OK.</td><td>Deux jumps kubeconfig ; alerte <code>nc -z :6443</code>.</td></tr>
+          <tr><td>M12</td><td>Redis overlay sans mot de passe.</td><td>AUTH Redis ; ne pas publier le port.</td></tr>
+          <tr><td>M13</td><td>Logs nginx sans Host ; verify SSL au niveau info.</td><td><code>$host $ssl_client_verify $ssl_client_s_dn</code> ; <code>error_log … info</code> FSPIOP.</td></tr>
+        </table>
+      </section>
+
+      <section id="risques-faible" class="section">
+        <div class="badges"><span class="badge low">faible</span></div>
+        <h2>Risques faibles</h2>
+        <table>
+          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
+          <tr><td>F1</td><td>Même nginx que <code>erp.bftlabs.org</code> / <code>labs.inlogics.pro</code> (http2 deprecated). Reload FSPIOP = blast radius.</td><td>WAF Mojaloop dédié.</td></tr>
+          <tr><td>F2</td><td>Placeholder <code>&lt;dfsp&gt;</code> décommenté → <code>nginx -t</code> fail, pas de reload.</td><td>Pas de chemin fictif ; CI <code>nginx -t</code>.</td></tr>
+          <tr><td>F3</td><td>Handshake Hydra/MCM dans error.log masque les 400 SSL.</td><td>error_log par <code>server_name</code>.</td></tr>
+          <tr><td>F4</td><td>CronJob <code>vault-raft-snapshot</code> Init:Error (pas de backup Raft).</td><td>Fixer SA / PVC / token.</td></tr>
+          <tr><td>F5</td><td><code>ENABLE_*_EVENT_HANDLER=false</code> : moins d’audit métier.</td><td>Activer si Kafka lab présent.</td></tr>
+          <tr><td>F6</td><td>Confusion Hub CA vs CA DFSP dans les runbooks.</td><td>Cette section + commentaires WAF dans <code>docs/participant/examples/waf/openmfi.org</code>.</td></tr>
+        </table>
+      </section>
+
+      <section id="risques-ops" class="section">
+        <h2>Runbook et durcissement</h2>
+        <h3>Symptôme → action</h3>
+        <table>
+          <tr><th>Symptôme</th><th>Couche</th><th>Action immédiate</th></tr>
+          <tr><td>400 HTML <code>SSL certificate error</code> sur <code>*.ext</code></td><td>WAF mTLS</td><td>Commenter <code>ssl_verify_*</code> <strong>ce</strong> vhost ; extraire <code>ca.crt</code> Cilium ; pas Hub CA</td></tr>
+          <tr><td><code>certificate has expired</code> vers extapi</td><td>Serveur Hub</td><td><code>openssl s_client</code> ; <code>rollout restart extapi-envoy</code></td></tr>
+          <tr><td><code>invalid signature</code> PUT /quotes</td><td>JWS peer</td><td>MCM jwscerts 200 ? Vault leader ? Fingerprint moov. Pas 8 restarts agents</td></tr>
+          <tr><td>504 quote puis 3208 GET transfer</td><td>Conséquence</td><td>Traiter JWS/mTLS ; ignorer 3208</td></tr>
+          <tr><td><code>local node not active</code> MCM</td><td>Vault Raft</td><td><code>VAULT_ADDR=http://127.0.0.1:8200 vault status</code> ; ne pas restart SDK</td></tr>
+          <tr><td>POST transfer depuis un laptop</td><td>E1</td><td>Couper :11001 WAN ; activer API key</td></tr>
+          <tr><td>Restart <code>sdk-fececam</code></td><td>Tous DFSPs du nœud</td><td>Prévenir ; :4004 healthy <strong>avant</strong> restart SDK</td></tr>
+        </table>
+        <h3>Ordre recommandé (sans recasser le lab)</h3>
+        <ol>
+          <li><strong>E6</strong> rotation secret Hydra.</li>
+          <li><strong>E1</strong> API key outbound + firewall.</li>
+          <li><strong>E4</strong> sortir moov/mtn/clcam prod de l’overlay.</li>
+          <li><strong>E5</strong> anti-affinity Vault + alerte leader.</li>
+          <li><strong>E10</strong> probe extapi notAfter.</li>
+          <li><strong>M2 / M3 / E9</strong> CA par vhost ; <code>on</code> seulement gto/cmcalavi/moov/mtn.</li>
+          <li><strong>E8</strong> peer JWS par tenant (code overlay).</li>
+          <li><strong>E2 / E3</strong> <code>CHECK_ILP=true</code>, auto-accept <code>false</code>.</li>
+          <li><strong>E7</strong> JWS PUT parties.</li>
+          <li><strong>M1</strong> ALS en https.</li>
+          <li><strong>M7 / M8</strong> allowlist IP Hub + révocation cert.</li>
+        </ol>
+        <h3>Vault status (HTTP, pas HTTPS)</h3>
+<pre><code>kubectl -n vault exec vault-0 -c vault -- \
+  env VAULT_ADDR=http://127.0.0.1:8200 vault status
+</code></pre>
+        <div class="note">
+          <strong>WAF — extraire les CA DFSP (Hub, pas WAF)</strong>
+        </div>
+<pre><code>mkdir -p "$HOME/dfsp-ca"
+for n in gto cmcalavi moov mtn; do
+  kubectl -n cilium-secrets get secret "${n}-clientcert-tls" \
+    -o jsonpath='{.data.ca\.crt}' | base64 -d &gt; "$HOME/dfsp-ca/${n}-ca.pem"
+done
 </code></pre>
       </section>
 
