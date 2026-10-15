@@ -64,8 +64,8 @@
           <a class="item" href="#risques-mono-failles">SDK 1:1 — failles</a>
           <a class="item" href="#risques-mono-ops">SDK 1:1 — runbook</a>
           <a class="item" href="#risques-infra">Infra — imbrication</a>
-          <a class="item" href="#risques-infra-failles">Infra — failles</a>
-          <a class="item" href="#risques-infra-hdd">Infra — HDD et runbook</a>
+          <a class="item" href="#risques-infra-failles">Infra — failles F1–F14</a>
+          <a class="item" href="#risques-infra-hdd">Infra — plan et mesures</a>
         </details>
         <details class="nav-group" open>
           <summary>Référence</summary>
@@ -118,7 +118,7 @@
         </table>
         <p>Les deux ne doivent <strong>pas</strong> publier les mêmes noms dans la même zone : external-dns est en <code>policy: sync</code> et <em>efface</em> les enregistrements qu’il ne gère plus.</p>
         <p>Cible DNS publique : l’annotation <code>external-dns.alpha.kubernetes.io/target</code> est la seule valeur envoyée au DNS. Cilium reste privé. <code>*.int</code> → IP LAN du gateway interne. <code>*.ext</code> de <em>ce</em> cluster → <code>wan</code> (IP de bordure).</p>
-        <p>Guide générique toolkit : <code>docs/adopter/deployment-cc.md</code>. Source lab : <code>docs/adopter/deployment-cc-lab-openmfi.md</code>. Stockage <strong>HDD</strong> et couches Proxmox→Talos→pods→Docker : <a href="#risques-infra">risques infra</a>.</p>
+        <p>Guide générique toolkit : <code>docs/adopter/deployment-cc.md</code>. Source lab : <code>docs/adopter/deployment-cc-lab-openmfi.md</code>. Nested Sonatel→Proxmox→Talos et I/O etcd : <a href="#risques-infra">risques infra</a>.</p>
         <div class="ctx">
           <strong>Contexte actuel — lab openmfi (validé)</strong>
           <table>
@@ -1438,7 +1438,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <strong>Validé le 15 oct. 2026</strong>
           WAF mTLS avec CA DFSP : <code>ssl-client-verify: SUCCESS</code>. Transfert cmcalavi → moov OK. Overlay 8 tenants. Vault unsealed, leader <code>vault-1</code>. MCM <code>/dfsps/jwscerts</code> 200. Cela n’annule pas E1–E11.
         </div>
-        <p>Sources : <code>RISQUES-TRANSFERTS.md</code> (overlay) · <a href="#risques-mono">SDK 1:1</a> · <a href="#risques-infra">infra imbriquée / HDD</a>.</p>
+        <p>Sources : <code>RISQUES-TRANSFERTS.md</code> (overlay) · <a href="#risques-mono">SDK 1:1</a> · <a href="#risques-infra">infra nested / etcd</a>.</p>
       </section>
 
       <section id="risques-eleve" class="section">
@@ -1701,102 +1701,110 @@ docker inspect sdk-fececam --format '{{range .Config.Env}}{{println .}}{{end}}' 
 
       <section id="risques-infra" class="section">
         <div class="badges">
-          <span class="badge high">HDD</span>
-          <span class="badge">Proxmox → Talos → K8s → Docker</span>
+          <span class="badge high">cause racine I/O</span>
+          <span class="badge">Sonatel KVM → Proxmox nested → Talos</span>
         </div>
-        <h2>Infra — architecture imbriquée</h2>
-        <p class="lead">Les disques de l’infra sont des <strong>HDD</strong>. Un transfert d’argent traverse plusieurs couches qui se croient indépendantes (HA, IOPS, réseau). Chaque couche ajoute un <code>fsync</code> et une file d’attente. Vault Raft, API K8s et stampede Docker du 14–15 oct. sont des symptômes d’imbrication, pas des bugs isolés.</p>
-        <div class="ctx">
-          <strong>Pile réelle</strong>
-          HDD → Proxmox (LVM/qcow2) → VM Talos <code>ml-cc</code> / <code>ml-test</code> + WAF + nœud SDK. Dans Talos : etcd, Vault Raft, PXC, Kafka, OpenEBS, Envoy/Cilium. Sur le SDK : overlayfs Docker, 8 Vaults fichier, Redis, 5 SDK 1:1 + overlay.
-        </div>
-<pre><code>CBS → :11001 Docker
-   → sdk-fececam → TLS extra_hosts 172.16.2.28 (extapi)
-   → Envoy inbound → ALS (etcd/MySQL)
-   → Cilium Envoy mTLS → WAF nginx
-   → SDK payee :6000 → Redis/Vault DFSP (même HDD)
-   → callback inverse
-</code></pre>
+        <h2>Infra — imbrication et instabilité ml-test</h2>
+        <p class="lead">Les CrashLoopBackOff (cilium-operator, vault, kube-scheduler, handlers Mojaloop) ne viennent <strong>pas</strong> d’un chart K8s. Cause unique : latence disque → etcd rate → VIP control plane retiré → API intermittente. Mesures : 30 juil.–31 août 2026. Même signature le 15 oct. (<code>no route to host</code> :6443).</p>
         <div class="warn">
-          <strong>HA de papier</strong>
-          Trois pods Vault sur <code>ml-test-w-2</code> + un HDD ≠ haute disponibilité. Trois control planes Talos sur le même stockage = un goulot etcd.
+          <strong>Pas une correction</strong>
+          Le cluster s’est stabilisé après l’arrêt de <code>ml-cc-m-0</code> et <code>cmcalavi-sdk-node</code>. Contournement : le risque revient dès que l’I/O remonte.
         </div>
-        <p>Détail : <a href="#risques-infra-failles">failles</a> · <a href="#risques-infra-hdd">HDD, matrice, commandes</a>. Markdown : <code>RISQUES-INFRA.md</code>.</p>
+        <div class="ctx">
+          <strong>Trois facteurs</strong>
+          Virtualisation imbriquée (Sonatel → Proxmox VE 9.2.5 nested → Talos 1.13.3 / K8s 1.36.1) · un disque <code>sda</code> 300 Go partagé · etcd <strong>unique</strong> (<code>ml-test-c-0</code>).
+        </div>
+<pre><code>Contention I/O sda (fsync 300–450 ms)
+    → etcd : context deadline exceeded
+    → etcd session closed → VIP 172.16.2.25 retiré
+    → API :6443 « no route to host »
+    → CrashLoopBackOff en cascade
+</code></pre>
+        <p>Le 30/07/2026, le VIP a oscillé (assigné / retiré) en moins de 3 minutes. Ce n’est <strong>pas</strong> du routage : c’est etcd qui lâche la session.</p>
+        <table>
+          <tr><th>Métrique hôte</th><th>Observé</th><th>Cible etcd</th></tr>
+          <tr><td><code>w_await</code></td><td>78 – 208 ms</td><td>&lt; 10 ms</td></tr>
+          <tr><td><code>f_await</code> (fsync)</td><td>333 – 446 ms</td><td>&lt; 10–20 ms</td></tr>
+          <tr><td><code>%util</code></td><td>85 – 93 %</td><td>&lt; 70–80 % continu</td></tr>
+          <tr><td><code>aqu-sz</code></td><td>29 – 34</td><td>~0–2</td></tr>
+          <tr><td><code>%iowait</code></td><td>10 – 16 %</td><td>&lt; 5 %</td></tr>
+        </table>
+        <p>Hôte : load 21–23 / 32 vCPU, ~90 / 128 Go RAM, steal ~0. VM SDK : PSI I/O Full 15–35 %. <code>vault-2</code> : 537 restarts. Uptime control plane 50 min vs cluster 2 j.</p>
+        <p>Failles <a href="#risques-infra-failles">F1–F14</a> · <a href="#risques-infra-hdd">plan, fio, QoS</a>. Source : <code>RISQUES-INFRA.md</code>.</p>
       </section>
 
       <section id="risques-infra-failles" class="section">
-        <h2>Infra — failles</h2>
+        <h2>Infra — failles (F1–F14)</h2>
+        <p>Audit mesuré (août 2026). Certitude indiquée. Ne pas coller de <code>talosconfig</code> / kubeconfig ici (F10).</p>
         <h3><span class="badge high">Élevé</span></h3>
         <table>
-          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
-          <tr><td>I1</td><td>Vault ×3 (et souvent etcd) sur <strong>un</strong> worker / un HDD. 200+ restarts ; :8201 refused ; MCM jwscerts 500.</td><td>Anti-affinity + NVMe Raft. Tant que HDD unique : ne pas traiter comme HA ; freeze snapshots pendant la fenêtre argent.</td></tr>
-          <tr><td>I2</td><td>API K8s : ping OK, TCP :6443 <code>no route</code>. NAT <code>vmbr0</code>/<code>eno1</code>, routes /32 <strong>non persistantes</strong>. etcd fsync HDD.</td><td>SSD etcd ; VIP ; iptables systemd ; alerte <code>nc -z :6443</code>. Console Proxmox si SSH <code>eno1</code> casse.</td></tr>
-          <tr><td>I3</td><td>Triple proxy : Docker → Cilium/Envoy → WAF nginx (+ 301 ALS http). Quote 30 s sans appli « lente ».</td><td>ALS en https ; mesurer Envoy + nginx + SDK ; MTU Proxmox / VXLAN / bridge.</td></tr>
-          <tr><td>I4</td><td>PVC OpenEBS dans qcow2/LVM HDD (thin). Write amplification Kafka/MySQL.</td><td>Disques VM <strong>raw + SSD</strong> pour data. HDD = MinIO froid / ISO.</td></tr>
-          <tr><td>I5</td><td>Nœud SDK : dizaines de volumes Docker sur le même HDD. <code>just build</code> / 8 restarts = tempête I/O (+ Hub si même spindle).</td><td>SSD <code>/var/lib/docker</code> ; pas de co-hébergement Hub/SDK ; quota cgroup ; étaler les restarts.</td></tr>
-          <tr><td>I6</td><td>Pont sans NIC esclave, SNAT, <code>rp_filter=0</code>. Perdu au reboot = plus de Talos.</td><td>iptables-persistent ; pont = 1 NIC + 1 IP ; test reboot.</td></tr>
+          <tr><th>ID</th><th>Constat</th><th>Correction</th></tr>
+          <tr><td>F1</td><td>fsync 10–40× le seuil etcd. Mesuré.</td><td>Court terme : pas ml-cc + SDK + ml-test sans <code>iostat</code>. Moyen terme : SSD/NVMe au moins pour le control plane. Bench fio.</td></tr>
+          <tr><td>F2</td><td>Nested ×3 (KVM fournisseur → Proxmox → Talos). Mesuré.</td><td>Bare metal Proxmox ou Talos chez le fournisseur. Moins de VM imbriquées ; virtio/cache (F11).</td></tr>
+          <tr><td>F3</td><td>Un control plane = un etcd. Tout incident VM = cluster mort. Mesuré.</td><td>Test : disque rapide. Au-delà : 3 CP (impair), hôtes distincts. Allonger election-timeout = palliatif seulement.</td></tr>
+          <tr><td>F4</td><td>Profil <code>tps-1</code> : tous les placement groups sur le nœud Proxmox <code>mojaloop</code> / <code>sda</code>. Mesuré.</td><td>2–3 hôtes, ou documenter « aucune HA ».</td></tr>
+          <tr><td>F5</td><td>ml-cc, SDK, CT101, ml-test (4 VM) sur le même disque. Stable seulement après arrêt ml-cc + SDK. Mesuré.</td><td>QoS <code>iops_*</code>/<code>mbps_*</code> ; disque CP dédié ; règle d’exploitation.</td></tr>
         </table>
         <h3><span class="badge med">Moyen</span></h3>
         <table>
-          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
-          <tr><td>J1</td><td>Un WAF pour Hub, MCM, FSPIOP, docs, sites tiers. DNS <code>sync</code> peut effacer des records.</td><td>WAF Mojaloop dédié ; freeze DNS cutover.</td></tr>
-          <tr><td>J2</td><td>Loki/Tempo/MinIO sur les mêmes HDD qu’etcd.</td><td>Rétention courte ; scrape léger ; MinIO ailleurs.</td></tr>
-          <tr><td>J3</td><td><code>vault-raft-snapshot</code> Init:Error — pas de backup, I/O en plus.</td><td>Fixer le Job ; snapshot hors heures, hors volume Raft.</td></tr>
-          <tr><td>J4</td><td>Drift NTP (JWS / Date FSPIOP).</td><td>NTP Talos + hôtes ; alerte offset &gt; 1 s.</td></tr>
-          <tr><td>J5</td><td>Un VM SDK pour prod + lab.</td><td>Séparer les nœuds ; backup volumes avant upgrade.</td></tr>
-          <tr><td>J6</td><td><code>extra_hosts</code> extapi → 172.16.2.28 (bypass WAF). Split-brain debug cert.</td><td>Inventaire extra_hosts ; probe TLS <strong>depuis le SDK</strong>.</td></tr>
+          <tr><th>ID</th><th>Constat</th><th>Correction</th></tr>
+          <tr><td>F6</td><td>ml-test dépend de ml-cc (Harbor, S3, Loki) alors que ml-cc doit parfois être éteint. À vérifier.</td><td>Tester le fallback images ; déplacer ml-cc ; documenter.</td></tr>
+          <tr><td>F7</td><td>Pas d’alerte I/O/etcd. Obs sur ml-cc (arrêté). Constaté.</td><td><code>etcd_disk_wal_fsync</code> p99 &gt; 10 ms ; iostat ; flapping VIP. Supervision <strong>hors ml-cc</strong>.</td></tr>
+          <tr><td>F8</td><td>Vault 537 restarts. Mesuré.</td><td>Après I/O stable : <code>vault status</code>, Raft, snapshot. 3 réplicas sains avant test argent.</td></tr>
+          <tr><td>F9</td><td>~70 % RAM, load 21–23. Mesuré.</td><td>Réserver le CP ; pas de swap etcd.</td></tr>
+          <tr><td>F10</td><td><code>talosconfig</code> (clé admin) collé dans un échange. Constaté.</td><td>Jamais dans la doc. Rotation si diffusion. Masquer les secrets.</td></tr>
+          <tr><td>F11</td><td>Type stockage fournisseur et <code>cache=</code> Proxmox inconnus. À vérifier.</td><td>Demander IOPS/NVMe. <code>qm config</code>. <code>writeback</code> : test only.</td></tr>
         </table>
         <h3><span class="badge low">Faible</span></h3>
         <table>
-          <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
-          <tr><td>K1</td><td>Thin Proxmox : guest <code>df</code> OK, datastore 100 % → crash etcd/Vault.</td><td>Alerte datastore ; pas de thin sur data.</td></tr>
-          <tr><td>K2</td><td>Pas de QoS IOPS Proxmox. Un <code>docker pull</code> tue Kafka.</td><td><code>iops_rd</code> / <code>mbps</code> par VM.</td></tr>
-          <tr><td>K3</td><td>Logs Docker json-file illimités → disque plein.</td><td><code>max-size</code> daemon.json.</td></tr>
-          <tr><td>K4</td><td>Backup HDD lent : dump MySQL de nuit encore actif le matin.</td><td>Backup hors bande / autre disque.</td></tr>
+          <tr><th>ID</th><th>Constat</th><th>Correction</th></tr>
+          <tr><td>F12</td><td><code>talosctl</code> par défaut vers <code>172.16.2.100</code> (faux no route).</td><td><code>TALOSCONFIG</code> ; <code>talosctl config info</code>.</td></tr>
+          <tr><td>F13</td><td>Client 1.13.5 / nœuds 1.13.3.</td><td>Aligner les versions.</td></tr>
+          <tr><td>F14</td><td>NTP/DNS Talos commentés dans <code>config.yaml</code>.</td><td><code>talosctl time</code> ; etcd/certs = horloge.</td></tr>
         </table>
       </section>
 
       <section id="risques-infra-hdd" class="section">
-        <h2>HDD, matrice et durcissement</h2>
-        <p>Sur HDD, Kafka, etcd, Vault Raft et Docker <strong>se volent les IOPS</strong>. Un scheme qui déplace de l’argent vise NVMe (ou SSD entreprise) pour etcd, Vault, MySQL, Kafka, <code>/var/lib/docker</code>. Le HDD reste pour archives MinIO, backups froids, ISO Proxmox.</p>
+        <h2>Infra — plan, mesures, palliatifs</h2>
+        <h3>Priorités</h3>
         <table>
-          <tr><th>Charge</th><th>Effet HDD</th><th>Impact argent</th></tr>
-          <tr><td>etcd <code>fsync</code></td><td>p99 ≫ NVMe</td><td>API / ALS lents, timeouts</td></tr>
-          <tr><td>Vault Raft</td><td>Élections, standby</td><td>JWS/PKI 500</td></tr>
-          <tr><td>Kafka + PXC WAL</td><td>Flow control</td><td>Quote/transfer Hub 5xx</td></tr>
-          <tr><td>Docker overlayfs</td><td><code>just build</code>, restarts</td><td>Trous WS, 502</td></tr>
-          <tr><td>nginx access.log</td><td>Sync sous volume</td><td>WAF lent</td></tr>
+          <tr><th>P</th><th>Action</th><th>Couvre</th></tr>
+          <tr><td>P0</td><td>Pas de ml-cc + SDK + ml-test ensemble sans <code>iostat</code></td><td>F1, F5</td></tr>
+          <tr><td>P0</td><td>Limiter I/O par disque virtuel Proxmox</td><td>F5</td></tr>
+          <tr><td>P0</td><td>Retirer/masquer credentials Talos ; rotation si besoin</td><td>F10</td></tr>
+          <tr><td>P1</td><td>Offre stockage / NVMe chez le fournisseur</td><td>F1, F2, F11</td></tr>
+          <tr><td>P1</td><td>Alertes etcd/I/O <strong>indépendantes de ml-cc</strong></td><td>F7</td></tr>
+          <tr><td>P1</td><td>Santé Vault + snapshot ; ml-test sans ml-cc</td><td>F8, F6</td></tr>
+          <tr><td>P2</td><td>Disque control plane rapide dédié ; resize VM ; talosconfig/NTP</td><td>F1, F3, F9, F12–F14</td></tr>
+          <tr><td>P3</td><td>Sortir du nested ; 3 CP / plusieurs hôtes</td><td>F2, F3, F4</td></tr>
         </table>
-        <h3>Symptôme → couche</h3>
-        <table>
-          <tr><th>Symptôme</th><th>Regarder d’abord</th></tr>
-          <tr><td>Vault :8201 refused, 3 pods 1 node</td><td>I1 + <code>iowait</code> worker</td></tr>
-          <tr><td>kubectl no route, ping OK</td><td>I2 NAT/conntrack</td></tr>
-          <tr><td>Quote 504, CPU SDK bas</td><td>I3 hops + I4 PVC</td></tr>
-          <tr><td>8 × ECONNREFUSED :4004</td><td>I5 stampede Docker/HDD</td></tr>
-          <tr><td>Après reboot Proxmox, plus de Talos</td><td>I6 iptables</td></tr>
-          <tr><td>Cert K8s OK, TLS expired</td><td>Envoy + I/O <code>watched_directory</code></td></tr>
-        </table>
-        <h3>Ordre</h3>
-        <ol>
-          <li>Mesurer <code>iostat -xz 5</code> sur Proxmox, workers, SDK.</li>
-          <li><strong>I6</strong> réseau persistant (reboot testé).</li>
-          <li><strong>I2</strong> SSD etcd + alerte :6443.</li>
-          <li><strong>I1</strong> Vault pas co-localisé ; NVMe Raft.</li>
-          <li><strong>I5</strong> Docker sur SSD ; séparer Hub / SDK.</li>
-          <li><strong>I4</strong> PVC data raw SSD.</li>
-          <li><strong>I3</strong> moins de hops (https ALS).</li>
-          <li>QoS Proxmox + rotation logs Docker.</li>
-        </ol>
-<pre><code># Proxmox — ROTA=1 → HDD
-lsblk -d -o NAME,ROTA,TYPE,SIZE,MODEL
-iostat -xz 5 3
-pvesm status
-
-kubectl -n vault get pods -o wide
-df -hT /var/lib/docker   # nœud SDK
+        <h3>fio (p99 fdatasync &lt; ~10 ms)</h3>
+<pre><code>mkdir -p /tmp/etcd-bench &amp;&amp; cd /tmp/etcd-bench
+fio --rw=write --ioengine=sync --fdatasync=1 \
+    --directory=/tmp/etcd-bench --size=22m --bs=2300 --name=etcd-fsync
 </code></pre>
-        <p>Voir aussi <a href="#hub-net">Hub — réseau, DHCP, NAT</a> (pont <code>vmbr0</code> sans NIC esclave).</p>
+        <h3>Surveillance</h3>
+<pre><code>iostat -x 2
+talosctl -n 172.16.2.114 dmesg -f | grep -i "etcd\|vip"
+talosctl -n 172.16.2.114 service etcd
+kubectl get pods -A | grep -v Running
+</code></pre>
+        <h3>QoS Proxmox (exemple)</h3>
+<pre><code>scsi0: local-lvm:vm-XXX-disk-0,mbps_rd=100,mbps_wr=50,iops_rd=2000,iops_wr=1000
+</code></pre>
+        <h3>Palliatif etcd (masque le symptôme)</h3>
+<pre><code>cluster:
+  etcd:
+    extraArgs:
+      heartbeat-interval: "500"
+      election-timeout: "5000"
+</code></pre>
+        <p>À retirer dès que le stockage est corrigé : des délais longs retardent aussi la détection d’une vraie panne.</p>
+        <div class="note">
+          <strong>Hors infra</strong>
+          Un <code>PUT /parties/…/error</code> 400 sans <code>errorCode</code> (cmcalavi) est applicatif (ALS / FSPIOP 3102). La PSI I/O du SDK peut jouer, non démontré. Participants ledger OK (200).
+        </div>
+        <p>Limites : iostat court ; logs etcd natifs non lus ; type disque fournisseur non confirmé. Voir aussi <a href="#hub-net">Hub — réseau</a>.</p>
       </section>
 
       <section id="ports" class="section">

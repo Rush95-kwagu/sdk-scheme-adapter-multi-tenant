@@ -1,212 +1,129 @@
-# Registre des risques — infrastructure imbriquée (HDD)
+# Audit infrastructure : instabilité `ml-test` (imbrication + I/O)
 
-**Date :** 15 octobre 2026  
-**Périmètre :** hôte(s) Proxmox, clusters Talos `ml-cc` / `ml-test`, WAF-AGG, nœud SDK `172.25.2.117`.  
-**Contrainte déclarée :** **disques HDD** (pas SSD/NVMe) sous toute la pile.
+**Sources :** audit 30 juil. – 31 août 2026 (`audit-infra-instabilite-ml-test.md`) ; observations 14–15 oct. 2026 (Vault Raft, `kubectl` :6443, stampede SDK).  
+**Périmètre :** hébergement du cluster Talos `ml-test` et du Hub.  
+**Chaîne :** VM Sonatel (KVM) → Proxmox VE 9.2.5 (**nested**) → VM Talos v1.13.3 / Kubernetes v1.36.1.
 
-Un transfert d’argent traverse **plusieurs couches d’orchestration** qui se croient indépendantes (HA, IOPS, réseau). Sur HDD, chaque couche ajoute latence `fsync` et files d’attente. Les pannes 14–15 oct. (Vault Raft, API K8s `no route to host`, Envoy cert stale, stampede Docker) sont des **symptômes d’imbrication**, pas des bugs isolés.
+Les CrashLoopBackOff (cilium-operator, vault, kube-controller-manager, kube-scheduler, handlers Mojaloop) **ne sont pas** un défaut de chart Kubernetes. Cause racine : **latence disque** → etcd rate → VIP control plane retiré → API intermittente.
 
 ---
 
-## Architecture imbriquée (telle qu’exploitée)
+## Résumé exécutif
+
+Trois facteurs structurels :
+
+1. **Virtualisation imbriquée** (hyperviseur Sonatel → Proxmox → VM Talos).
+2. **Stockage unique partagé** (`sda`, 300 Go) sollicité par plusieurs VM.
+3. **etcd à instance unique** (un control plane), sans quorum.
+
+Le cluster s’est stabilisé après l’arrêt de `ml-cc-m-0` et `cmcalavi-sdk-node` : **contournement**, pas une correction. Récidive dès que l’I/O remonte.
 
 ```
-HDD physique
-  └─ Proxmox (LVM / qcow2 / OpenEBS backing)
-       ├─ VM Talos ml-cc          (Harbor, MinIO, obs)
-       ├─ VM Talos ml-test        (etcd, Vault, MySQL, Kafka, Envoy, MCM)
-       │    └─ Kubernetes + Cilium
-       │         ├─ etcd                    (fsync synchrone)
-       │         ├─ Vault Raft ×3           (journal)
-       │         ├─ PXC / MySQL, Kafka      (WAL)
-       │         ├─ OpenEBS / PVC           (encore un FS)
-       │         └─ Envoy + Cilium SDS
-       ├─ VM WAF-AGG              (nginx, logs, Let's Encrypt)
-       └─ VM SDK (Docker)
-            ├─ overlayfs + volumes Vault×8, Redis×N, SDK×5 + overlay
-            └─ extra_hosts → 172.16.2.28 (extapi)
+Contention I/O sda (fsync 300–450 ms)
+        → etcd : context deadline exceeded
+        → etcd session closed → VIP 172.16.2.25 retiré
+        → API :6443 « no route to host »
+        → CrashLoopBackOff en cascade
 ```
 
-**Chemin d’un POST /transfers (payer overlay → payee 1:1) :**
-
-CBS → `:11001` (iptables hôte SDK) → `sdk-fececam` → TLS extapi (VM Hub) → Envoy inbound → ALS (etcd/MySQL) → Cilium Envoy **mTLS** → WAF HDD → nginx → SDK payee `:6000` → Redis/Vault DFSP sur **le même** HDD Docker → callback inverse.
-
-Chaque saut = copie, NAT ou TLS. Le HDD est **partagé** par Kafka Hub, etcd, Vault Raft **et** 8 Vaults DFSP Docker.
+Chronologie Talos `ml-test-c-0` (30/07/2026 UTC) : health etcd OK 15:36 → deadline 15:37 → VIP assigné 15:40 → session closed / VIP retiré 15:41 → réassigné 15:42 → retiré 15:42 → réassigné 15:43. **Signature etcd instable**, pas un pare-feu.
 
 ---
 
-## Élevé
+## Preuves (août 2026)
 
-### I1 — HA Kubernetes / Vault **sur le même disque et souvent le même nœud**
+| Métrique hôte (`iostat`) | Observé | Cible etcd |
+|---|---|---|
+| `w_await` | 78 – 208 ms | &lt; 10 ms |
+| `f_await` (fsync) | 333 – 446 ms | &lt; 10–20 ms |
+| `%util` | 85 – 93 % | &lt; 70–80 % continu |
+| `aqu-sz` | 29 – 34 | ~0–2 |
+| `%iowait` CPU | 10 – 16 % | &lt; 5 % |
 
-**Fait :** `vault-0/1/2` tous sur `ml-test-w-2`. Raft « 3 replicas » = **un worker + un HDD**.  
-**Preuve :** 200+ restarts ; `dial :8201 connection refused` ; MCM `local node not active`.
+Hôte : load 21–23 / 32 vCPU ; steal ~0 ; RAM 128 Go (~90 Go used) ; 5 VM KVM dont 4 à ~18 Go RSS.  
+`sda` = QEMU HARDDISK ; `systemd-detect-virt` = kvm ; hébergeur VM `mojaloop` = Sonatel.  
+PSI I/O VM `106` (`cmcalavi-sdk-node`) Full ~15–35 %.
 
-**Risque :** une file d’attente HDD (Kafka compact, snapshot, `docker build`) → timeout Raft → élection → Vault standby sans leader → plus de JWS, plus de PKI, transferts en `invalid signature` / 500.
+Redémarrages K8s : `vault-2` 537 ; handlers moja ~203–206 ; psmdb-operator 122 ; OpenEBS 111 ; redis-operator 103 ; kube-controller/scheduler 15–16. Uptime `ml-test-c-0` 50 min vs cluster 2 j → control plane **redémarré**.
 
-**Remède :** anti-affinity Vault **et** workers sur **disques/nœuds distincts**. SSD/NVMe pour etcd + Vault + MySQL + Kafka. Tant que HDD unique : **ne pas** traiter le cluster comme HA ; runbook unseal + freeze des jobs lourds (snapshots, Harbor GC) pendant la fenêtre argent.
-
-### I2 — etcd / API K8s sur HDD + NAT Proxmox
-
-**Preuve :** ping `172.16.2.25` OK, `kubectl` `no route to host` :6443, puis TLS OK. NAT `vmbr0`/`eno1`, routes `/32` **non persistantes**.
-
-**Risque :** l’apiserver (etcd fsync) saturé ou conntrack plein → ops aveugle (pas de restart Envoy, pas de cert). Talos « 3 control planes » sur le même stockage = même goulot.
-
-**Remède :** SSD etcd ; VIP API stable ; iptables/routes **systemd** (pas seulement session) ; alerte `nc -z :6443` **et** latence etcd. Console Proxmox / Tailscale si SSH `eno1` casse après NAT.
-
-### I3 — Triple NAT / triple proxy sur le data path argent
-
-CBS → Docker publish `0.0.0.0` → (option) overlay réseau → extra_hosts → **Cilium LB** → Envoy → **Cilium Envoy egress mTLS** → **nginx WAF** → Docker 1:1.
-
-**Risque :** timeout quote 30 s (vu) sans qu’aucune appli « soit lente » : une jambe HDD + handshake TLS de trop. 301 ALS `http://` = encore un round-trip. Perte de `Host` / client cert au mauvais hop.
-
-**Remède :** moins de sauts (endpoints ALS **https**, pas de redirect 80). Mesurer `duration_ms` Envoy + `request_time` nginx + temps SDK. MTU cohérent (Proxmox → Cilium VXLAN → Docker bridge) : fragments = CPU+HDD.
-
-### I4 — OpenEBS / PVC **imbriqués dans des qcow2/LVM HDD**
-
-Kube croit avoir des volumes « locaux rapides ». Ils sont des fichiers sur HDD Proxmox, souvent thin-provisioned.
-
-**Risque :** amplification write (qcow2 + FS guest + WAL Kafka/MySQL). `Discard`/fstrim rarement en ligne. Latence p99 imprévisible → PXC flow control, Kafka under-replicated.
-
-**Remède :** disques VM **raw + SSD** pour `data` (MySQL, Kafka, etcd). HDD seulement MinIO froid / backups. Monitorer `iowait` hôte Proxmox **et** `kubectl top` **et** `iostat` SDK.
-
-### I5 — Nœud SDK : Docker overlayfs × dizaines de volumes sur le **même HDD**
-
-8 Vaults file-backend + Redis + 5 SDK + overlay + images. `just build` / `docker restart` = tempête I/O.
-
-**Risque :** un `docker restart` de 8 agents (15 oct.) coïncide avec Vault Hub instable : **contention disque globale** si SDK et Hub partagent le même SAN/HDD Proxmox, ou saturation CPU iowait sur le nœud SDK → WS `:4004` `ECONNREFUSED` prolongé.
-
-**Remède :** quota I/O cgroup ; ne pas co-héberger Hub et SDK sur le même spindle. SSD pour `/var/lib/docker`. Étaler les restarts. `ionice` backups.
-
-### I6 — iptables / `rp_filter` / pont **sans NIC esclave**
-
-`vmbr0` isolé, SNAT vers `eno1`, `rp_filter=0`. Règles **perdues au reboot**.
-
-**Risque :** après reboot Proxmox, Talos sans DHCP, API morte, Extapi injoignable — **tous** les DFSPs.
-
-**Remède :** netplan/ifup + iptables-persistent + test reboot. Pont : une NIC bridge port, une IP.
+Oct. 2026 : même VIP `no route to host` puis TLS OK ; Vault 3 pods sur `ml-test-w-2`, 200+ restarts, MCM `local node not active`.
 
 ---
 
-## Moyen
+## Failles (F1–F14)
 
-### J1 — Deux clusters (`ml-cc` / `ml-test`) + WAF unique + Cloudflare `wan`
+### Élevé
 
-external-dns `sync` peut **effacer** des records. Un WAF sert Hub, MCM, FSPIOP, docs, ERP tiers.
+**F1 — Saturation I/O (fsync).** 10–40× le seuil etcd. Impact : VIP, API, CrashLoop, risque cohérence Mongo/Redis/Vault.  
+Court terme : ne pas lancer `ml-cc` + SDK + `ml-test` sans `iostat`. Moyen terme : SSD/NVMe (au moins le disque control plane). Bench fio § annexes.
 
-**Risque :** reload nginx pour un vhost DFSP casse hydra/mcm (déjà des handshake reset). HDD logs nginx `access.log` unique.
+**F2 — Nested virt ×3.** Chaque couche ajoute du jitter sur les écritures sync. Idéal : Proxmox bare metal ou Talos chez le fournisseur. À défaut : moins de VM, virtio cache caractérisé (F11).
 
-**Remède :** WAF Mojaloop dédié ; error_log par vhost ; freeze DNS pendant cutover.
+**F3 — etcd unique (`ml-test-c-0`).** Pas de quorum. Test : acceptable si disque rapide. Préprod/prod : **3** control planes (impair), hôtes physiques distincts. Palliatif : `heartbeat-interval` / `election-timeout` (masque le symptôme).
 
-### J2 — Observabilité (Loki/Tempo/MinIO) sur HDD
+**F4 — SPOF hôte + disque.** Profil `tps-1` : tous les placement groups sur le nœud Proxmox `mojaloop` / `sda`. Une panne = control plane + workers + Hub. Documenter « pas de HA » ou répartir 2–3 hôtes.
 
-Les mêmes spindles que etcd. Un scrape trop fréquent = vol d’IOPS au Raft.
+**F5 — Co-hébergement sans isolation I/O.** `ml-cc-m-0`, `cmcalavi-sdk-node`, CT101 et `ml-test` (4 VM) sur le même `sda`. Stabilité seulement après arrêt ml-cc + SDK. QoS Proxmox `mbps_*` / `iops_*` ; disque CP dédié ; règle d’exploitation (quelles VM en parallèle).
 
-**Remède :** rétention courte ; scrape Prometheus allégé sur Vault/etcd ; MinIO sur autre disque.
+### Moyen
 
-### J3 — Job `vault-raft-snapshot` Init:Error
+**F6 — ml-test dépend de ml-cc** (Harbor, S3, Loki/Thanos) alors que ml-cc doit parfois être éteint. Vérifier le fallback images ; déplacer ml-cc ; documenter.
 
-Pas de backup Raft. Sur HDD un snapshot coincé **aggrave** I1.
+**F7 — Pas d’alerte I/O / etcd.** Découverte via CrashLoop. Obs pointe vers ml-cc arrêté. Alerter : `etcd_disk_wal_fsync_duration_seconds` p99 &gt; 10 ms ; iostat ; pertes de session etcd ; flapping VIP Talos. Supervision **hors ml-cc**.
 
-**Remède :** fixer le Job ; snapshots hors heures ; destination SSD/NFS pas le volume Raft.
+**F8 — Vault CrashLoop (537).** Après I/O stable : `vault status` chaque pod, Raft, snapshot. 3 réplicas sains avant test argent.
 
-### J4 — Horloge / NTP (Talos + Docker + WAF)
+**F9 — Marge RAM/CPU hôte.** ~70 % RAM, load 21–23. Réserver le control plane ; pas de swap pour etcd.
 
-JWS et certs `notBefore`/`Date` FSPIOP. HDD n’aide pas le drift, mais un `fsync` lent retarde `chrony`.
+**F10 — `talosconfig` collé en clair** (cert client + clé). Accès admin Talos. Ne jamais le mettre dans la doc ; rotation si l’échange a fuité.
 
-**Remède :** NTP explicite Talos + hôtes ; alerte offset &gt; 1 s.
+**F11 — Stockage Sonatel / `cache=` Proxmox inconnus.** Demander type, IOPS, offre NVMe. `qm config`. `cache=writeback` : moins de latence, risque perte crash — test only.
 
-### J5 — Un seul nœud SDK pour prod + lab
+### Faible
 
-Pas d’anti-affinity métier. Panne VM ou HDD = moov 1:1 **et** overlay.
+**F12 — `talosconfig` par défaut vers `172.16.2.100`.** Faux « no route ». `TALOSCONFIG` / `talosctl config info`.
 
-**Remède :** nœud SDK prod vs lab ; backup `docker volume` **avant** `apt upgrade`.
+**F13 — talosctl 1.13.5 vs nœuds 1.13.3.** Aligner.
 
-### J6 — extra_hosts `extapi → 172.16.2.28` vs DNS public
-
-Bypass Cloudflare/WAF pour le SDK → Envoy. Le WAF ne voit pas le TLS DFSP→Hub.
-
-**Risque :** split-brain cert (on debug le WAF, le SDK parle au LB interne). IP 172.16.2.28 bougée = tous les extra_hosts morts.
-
-**Remède :** inventaire extra_hosts ; documenter le chemin réel ; probe depuis le **SDK** pas seulement openssl WAF.
+**F14 — NTP/DNS Talos commentés dans `config.yaml`.** `talosctl time` ; etcd/certs sensibles à l’horloge.
 
 ---
 
-## Faible
+## Plan priorisé
 
-### K1 — Thin provisioning Proxmox : `df` guest OK, datastore 100 %
-
-Arrêt brutal VM → corruption etcd/Vault.
-
-### K2 — Pas de QoS disque Proxmox (`iops_rd` / `mbps`)
-
-Un `docker pull` Hub ISO tue Kafka.
-
-### K3 — Logs Docker json-file illimités sur HDD
-
-Remplir le disque → Redis/Vault read-only.
-
-**Remède :** `log-opts max-size` daemon.json.
-
-### K4 — Backup HDD lent = RPO illusoire
-
-Un dump MySQL de nuit encore en cours le matin vole les IOPS des transferts.
+| P | Action |
+|---|---|
+| P0 | Pas de ml-cc + SDK + ml-test ensemble sans `iostat` |
+| P0 | Limites I/O disques virtuels Proxmox |
+| P0 | Masquer/rotation credentials Talos |
+| P1 | Interroger Sonatel (NVMe / IOPS) ; alertes etcd hors ml-cc ; santé Vault ; ml-test sans ml-cc |
+| P2 | Disque CP rapide dédié ; resize VM ; talosconfig/NTP |
+| P3 | Sortir du nested ; 3 CP / plusieurs hôtes |
 
 ---
 
-## HDD : ce que ça change pour l’argent
+## Annexes
 
-| Charge | Effet HDD | Impact transfert |
-|--------|-----------|------------------|
-| etcd `fsync` | p99 10–100× vs NVMe | API K8s / ALS lents, timeouts |
-| Vault Raft log | Élections, standby | JWS/PKI 500 |
-| Kafka + PXC WAL | Queue, flow control | Quote/transfer Hub 5xx |
-| Docker overlayfs | `just build`, restarts | Trous WS, callbacks 502 |
-| nginx access.log | Sync éventuellement | WAF lent sous volume |
-
-**Cible mini pour un scheme qui bouge de l’argent :** NVMe (ou SSD entreprise) pour etcd, Vault, MySQL, Kafka, `/var/lib/docker`. HDD : archives MinIO, backups froids, ISO Proxmox.
-
----
-
-## Matrice symptôme → couche imbriquée
-
-| Symptôme | Couche à regarder **en premier** |
-|----------|----------------------------------|
-| Vault `8201 connection refused` + 3 pods 1 node | I1 + iowait `ml-test-w-2` |
-| kubectl `no route` / ping OK | I2 NAT/conntrack, pas « le DNS » |
-| Quote 504, CPU SDK bas | I3 hops + I4 PVC Hub |
-| 8 × `ECONNREFUSED :4004` | I5 stampede Docker/HDD |
-| Après reboot Proxmox, plus de Talos | I6 iptables |
-| Cert extapi K8s OK, TLS expired | Envoy (appli) **mais** I/O peut empêcher watched_directory |
-
----
-
-## Ordre de durcissement infra
-
-1. Mesurer : `iostat -xz 5` Proxmox, workers Talos, SDK — confirmer HDD saturé.  
-2. **I6** persistance réseau (reboot Proxmox testé).  
-3. **I2** SSD etcd + VIP + alerte :6443.  
-4. **I1** Vault/workers pas co-localisés ; NVMe Raft.  
-5. **I5** Docker sur SSD ; quota ; pas de co-résidence Hub/SDK.  
-6. **I4** PVC data sur raw SSD, pas qcow2 thin.  
-7. **I3** réduire hops (https ALS, pas 301).  
-8. Logs Docker rotation (K3) ; QoS Proxmox (K2).
-
----
-
-## Commandes (constat HDD / imbrication)
+**fio etcd (p99 fdatasync &lt; ~10 ms) :**
 
 ```bash
-# Hôte Proxmox
-lsblk -d -o NAME,ROTA,TYPE,SIZE,MODEL   # ROTA=1 → HDD
-iostat -xz 5 3
-pvesm status
-
-# Worker Hub
-kubectl -n vault get pods -o wide
-kubectl get nodes -o custom-columns=NAME:.metadata.name,OS:.status.nodeInfo.osImage
-
-# SDK
-df -hT /var/lib/docker
-docker system df -v | head
+mkdir -p /tmp/etcd-bench && cd /tmp/etcd-bench
+fio --rw=write --ioengine=sync --fdatasync=1 \
+    --directory=/tmp/etcd-bench --size=22m --bs=2300 --name=etcd-fsync
 ```
+
+**QoS Proxmox (exemple) :** `scsi0: …,mbps_rd=100,mbps_wr=50,iops_rd=2000,iops_wr=1000`
+
+**Palliatif etcd (dernier recours) :**
+
+```yaml
+cluster:
+  etcd:
+    extraArgs:
+      heartbeat-interval: "500"
+      election-timeout: "5000"
+```
+
+Hors infra : un PUT /parties error 400 sans `errorCode` (cmcalavi) est applicatif ; la PSI I/O du SDK peut aggraver, non démontré.
+
+Limites : iostat court ; logs etcd natifs non lus ; type stockage Sonatel non confirmé ; intégrité Vault/Mongo après crash non auditée.
