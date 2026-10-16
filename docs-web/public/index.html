@@ -445,19 +445,34 @@ securityContext:
         <p>Cible lab : namespace <code>mojaloop</code> (Deployments), <code>data</code> (PXC <code>mojaloop-db-pxc-0</code> / conteneur <code>pxc</code>). Mot de passe root : secret <code>data/mojaloop-db-secrets</code>, clé <code>root</code>. Chart Mojaloop 17.2.0 / central-ledger v19.12.7.</p>
         <h3>Prérequis</h3>
 <pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
-# pas le kubeconfig ml-cc
+# pas le kubeconfig ml-cc (artefacts New2 : …/artifacts/ml-test/kubernetes/kubeconfig)
 chmod +x scripts/hub/mojaloop-purge-dfsp.sh
 </code></pre>
+        <h3>Santé etcd (avant dry-run et avant <code>--execute</code>)</h3>
+        <p>Un <code>kubectl exec</code> coupé (VIP / etcd) produit <code>Base central_ledger introuvable</code> ou un <em>Périmètre</em> vide. Ne pas COMMIT tant que etcd n’est pas <code>ok</code>.</p>
+<pre><code>kubectl get --raw=/healthz/etcd
+# attendu : ok
+# si « etcd failed » : attendre, ne pas --execute
+</code></pre>
+        <h3>Lister les DFSP (noms ledger)</h3>
+        <p>Utiliser exactement <code>participant.name</code> (pas le FQDN). Le Hub (<code>id</code> 1) ne se passe pas au script.</p>
+<pre><code>PASS=$(kubectl -n data get secret mojaloop-db-secrets -o jsonpath='{.data.root}' | base64 -d)
+kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
+  env MYSQL_PWD="$PASS" mysql -uroot -N -B -e \
+  "SELECT participantId, name, isActive FROM central_ledger.participant ORDER BY participantId;"
+</code></pre>
         <h3>Commandes</h3>
-<pre><code># Simulation (défaut)
-./scripts/hub/mojaloop-purge-dfsp.sh cmcalavi
+<pre><code># Simulation (défaut) + SQL de relecture
+./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql cmcalavi
+
+# Plusieurs inactifs / tests (exemple lab)
+./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql \
+  cmparakou CMCOTONOU test1 test2 mojacom2026
 
 # Appliquer : switch à 0 réplique pendant la purge
-./scripts/hub/mojaloop-purge-dfsp.sh --execute --scale-down cmcalavi
-
-# Plusieurs noms, dump SQL, restart après coup
-./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge.sql \
-  --execute --restart gto moov-test
+# orthographe : --execute (pas --excute)
+./scripts/hub/mojaloop-purge-dfsp.sh --execute --scale-down \
+  cmparakou CMCOTONOU test1 test2 mojacom2026
 </code></pre>
         <table>
           <tr><th>Option</th><th>Effet</th></tr>
