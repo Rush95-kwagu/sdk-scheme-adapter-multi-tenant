@@ -534,4 +534,4 @@ Ne pas coller les dumps axios complets : le logger Axios peut y mettre les PEM m
 - Ne pas fusionner moov/mtn/clcam-\* sur cet overlay tant que le cutover n’est pas validé DFSP par DFSP.
 - `MULTI_DFSP` (préfixe backend) ≠ `PM4ML_MULTI_TENANT` (préfixe outbound + Host inbound).
 - Contribution Mojaloop éventuelle : flag off par défaut, tests d’intégration à deux agents mock.
-- Retrait d’un participant **côté switch** (ledger / oracles) : [`scripts/hub/mojaloop-purge-dfsp.sh`](../../scripts/hub/mojaloop-purge-dfsp.sh) — [guide](../../docs/adopter/mojaloop-purge-dfsp.md). Dry-run par défaut ; MCM / Hydra / Vault hors périmètre.
+- Ledger switch : [`scripts/hub/mojaloop-purge-dfsp.sh`](../../scripts/hub/mojaloop-purge-dfsp.sh) — [guide](../../docs/adopter/mojaloop-purge-dfsp.md). Purge (retrait du participant) ou `--reset` (transferts, positions à 0, ALIAS, MSISDN ; le DFSP reste). Dry-run par défaut ; MCM / Hydra / Vault hors périmètre. Vérifier `kubectl get --raw=/healthz/etcd` avant `--execute`.
