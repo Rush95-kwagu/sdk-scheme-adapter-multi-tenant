@@ -6,7 +6,7 @@
 
 Le POC (`poc/`) est validé (2 mock-agents, inbound 202, outbound 200). Ce document décrit le **cas réel** : un processus SDK overlay, **N** `mcm-agent`, **N backends**.
 
-Le lab openmfi **en production aujourd’hui** reste [N stacks Compose](../../docs/participant/dfsp-onboarding-runbook.md) (un SDK par DFSP). Ne bascule un DFSP réel sur cet overlay qu’après un créneau de test dédié.
+Le lab (zone <HUB_DOMAIN>) **en production aujourd’hui** reste [N stacks Compose](../../docs/participant/dfsp-onboarding-runbook.md) (un SDK par DFSP). Ne bascule un DFSP réel sur cet overlay qu’après un créneau de test dédié.
 
 Architecture, flux Mermaid, variables, déploiement et onboarding d’un nouveau DFSP : [TECHNICAL.md](TECHNICAL.md).
 
@@ -23,21 +23,20 @@ Architecture, flux Mermaid, variables, déploiement et onboarding d’un nouveau
 | `mcm-agent` + Vault + client Hydra | — | **oui** |
 | `DFSP_ID`, FQDN, certs JWS / mTLS | — | **oui** |
 | **Backend CBS** (`BACKEND_ENDPOINT`) | — | **oui** (c’est le cas normal) |
-| Vhost WAF `https://<dfsp>.ext.openmfi.org` | — | **oui** (même `proxy_pass` cible) |
+| Vhost WAF `https://<dfsp>.ext.<HUB_DOMAIN>` | — | **oui** (même `proxy_pass` cible) |
 | Endpoints MCM FSPIOP | — | **oui** (`https://<FQDN>` sans path) |
 
 Plusieurs backends : **oui**. Le SDK ne suppose pas un CBS unique. Chaque `NOTIFY` PM4ML upsert `backendEndpoint` dans `DfspConfigStore` sous le `dfspId`. La requête inbound/outbound applique **ce** backend.
 
-Exemples :
+Exemples (fictifs) :
 
 ```text
-cmcalavi / gto      →  172.16.2.16:8100/mojaloop
-clcam-calavi-test   →  172.16.2.16:8101/mojaloop
-clcam-jardins-test  →  172.16.2.16:8102/mojaloop
-moov                →  192.168.0.140:8000/mojaloop
+dfsp-a              →  <CBS_HOST>:8100/mojaloop
+dfsp-b              →  <CBS_HOST>:8101/mojaloop
+dfsp-c              →  <CBS_HOST>:8102/mojaloop
 ```
 
-`172.16.2.16:8100` sans `/mojaloop` est le SPA Granian (GET HTML, POST `/quoterequests` → 405). L’API connecteur est `…:8100/mojaloop`. Le NOTIFY agent écrase le fallback Compose : changer le `.env` des **deux** agents puis les recréer.
+`<CBS_HOST>:8100` sans `/mojaloop` est le SPA Granian (GET HTML, POST `/quoterequests` → 405). L’API connecteur est `…:8100/mojaloop`. Le NOTIFY agent écrase le fallback Compose : changer le `.env` des **deux** agents puis les recréer.
 
 Sans espace dans l’URL. Sans `http://` : le SDK préfixe `http://` tout seul (`http://http://…` casse).
 
@@ -49,18 +48,18 @@ Un même connecteur OpenCBS avec **deux tenants** = deux `BACKEND_ENDPOINT` (deu
 
 ```text
 Hub ALS / quoting
-    │  GET/POST https://<dfsp>.ext.openmfi.org/parties|quotes|transfers
+    │  GET/POST https://<dfsp>.ext.<HUB_DOMAIN>/parties|quotes|transfers
     ▼
-WAF 41.214.65.90:443     (un server_name par DFSP, TLS openmfi.org)
+WAF <WAF_WAN>:443     (un server_name par DFSP, TLS <HUB_DOMAIN>)
     │  proxy_pass http://<SDK_HOST>:<PORT_INBOUND_PARTAGE>
     ▼
 SDK overlay :5000 inbound     tenant = Host / FSPIOP-Destination
     │                         backend = store[dfspId].backendEndpoint
-    ├─ WS :4004 ── mcm-agent-calavi   (Vault A, Hydra calavi)
-    ├─ WS :4004 ── mcm-agent-jardins  (Vault B, Hydra jardins)
+    ├─ WS :4004 ── mcm-agent-<fspid>     (Vault A, Hydra dfsp-a)
+    ├─ WS :4004 ── mcm-agent-<fspid>     (Vault B, Hydra dfsp-b)
     └─ CBS
-         ├─ GET/POST http://172.16.2.16:8101/...
-         └─ GET/POST http://172.16.2.16:8102/...
+         ├─ GET/POST http://<CBS_HOST>:8101/...
+         └─ GET/POST http://<CBS_HOST>:8102/...
 
 CBS / testers
     │  POST http://<SDK_HOST>:<PORT_OUTBOUND_PARTAGE>/<dfspId>/transfers
@@ -68,7 +67,7 @@ CBS / testers
 SDK overlay :5001 outbound
 ```
 
-Le Hub **n’atteint pas** `172.25.2.117`. Callbacks = FQDN WAF en **https://**.
+Le Hub **n’atteint pas** `<SDK_HOST>`. Callbacks = FQDN WAF en **https://**.
 
 ---
 
@@ -80,9 +79,9 @@ Le Hub **n’atteint pas** `172.25.2.117`. Callbacks = FQDN WAF en **https://**.
 | `SDK_OUTBOUND_HOST_PORT` | `11001` | Idem ; API `/{dfspId}/…` |
 | `SDK_METRICS_HOST_PORT` | `11040` | |
 | Par DFSP : `MCM_HOST_PORT` | `11003`, `11103`, … | UI agent, unique |
-| `<DFSP_ID>` | `clcam-calavi-test` | = Hydra `client_id` = ledger |
-| `<DFSP_FQDN>` | `clcam-calavi-test.ext.openmfi.org` | |
-| `<BACKEND_ENDPOINT>` | `172.16.2.16:8101/mojaloop` | Sans schéma |
+| `<DFSP_ID>` | `<fspid>` | = Hydra `client_id` = ledger |
+| `<DFSP_FQDN>` | `<fspid>.ext.<HUB_DOMAIN>` | |
+| `<BACKEND_ENDPOINT>` | `<CBS_HOST>:8101/mojaloop` | Sans schéma |
 
 Ne pas réutiliser 4000–10103 déjà pris par les stacks 1-SDK-par-DFSP tant qu’ils tournent.
 
@@ -99,9 +98,9 @@ Pour **chaque** caisse, comme aujourd’hui :
    - **Pas** de `sdk-scheme-adapter` dans ce compose.
    - `DFSP_ID`, `DFSP_FQDN`, `AUTH_CLIENT_*`, `BACKEND_ENDPOINT` dans le `.env` de **cet** agent.
    - Port hôte `4004` **non publié** (réseau Docker uniquement), ou un `expose: ["4004"]`.
-   - `extra_hosts` : `hydra`/`mcm` → `41.214.65.90`, `extapi` → `172.16.2.28`.
+   - `extra_hosts` : `hydra`/`mcm` → `<WAF_WAN>`, `extapi` → `<HUB_EXTAPI>`.
 5. Signer CSR jusqu’à Status **8/8**.
-6. DNS A : `<DFSP_FQDN>` et `mcm-<DFSP_ID>.ext.openmfi.org` → `41.214.65.90` (pas l’IP SDK, pas `/etc/hosts` vers `172.25.2.117`).
+6. DNS A : `<DFSP_FQDN>` et `mcm-<DFSP_ID>.ext.<HUB_DOMAIN>` → `<WAF_WAN>` (pas l’IP SDK, pas `/etc/hosts` vers `<SDK_HOST>`).
 7. MCM : **tous** les callbacks FSPIOP = `https://<DFSP_FQDN>` (pas `http://`, pas d’IP, pas de `/quotes`).
 
 Détail agent / Hydra / Vault : [Compose lab](../../docs/participant/dfsp-onboarding-compose-lab.md).  
@@ -116,7 +115,7 @@ Image : `contrib/sdk-scheme-adapter-multi-tenant/Dockerfile` (`FROM mojaloop/sdk
 Réseau Docker **commun** avec les agents (ex. `sdk-openmfi`). Les noms WS doivent matcher `container_name` :
 
 ```text
-MGMT_API_WS_URLS=mcm-agent-clcam-calavi-test:4004,mcm-agent-clcam-jardins-test:4004
+MGMT_API_WS_URLS=mcm-agent-<fspid>:4004,mcm-agent-<fspid>:4004
 ```
 
 Variables SDK :
@@ -124,13 +123,13 @@ Variables SDK :
 ```text
 PM4ML_ENABLED=true
 PM4ML_MULTI_TENANT=true
-DFSP_HOST_SUFFIX=.ext.openmfi.org
+DFSP_HOST_SUFFIX=.ext.<HUB_DOMAIN>
 DFSP_ID=placeholder
 CACHE_URL=redis://redis:6379
-PEER_ENDPOINT=extapi.openmfi.org
-ALS_ENDPOINT=extapi.openmfi.org
-QUOTES_ENDPOINT=extapi.openmfi.org
-TRANSFERS_ENDPOINT=extapi.openmfi.org
+PEER_ENDPOINT=extapi.<HUB_DOMAIN>
+ALS_ENDPOINT=extapi.<HUB_DOMAIN>
+QUOTES_ENDPOINT=extapi.<HUB_DOMAIN>
+TRANSFERS_ENDPOINT=extapi.<HUB_DOMAIN>
 BACKEND_ENDPOINT=127.0.0.1:9
 INBOUND_LISTEN_PORT=5000
 OUTBOUND_LISTEN_PORT=5001
@@ -145,13 +144,13 @@ NODE_TLS_REJECT_UNAUTHORIZED=1
 
 `BACKEND_ENDPOINT` du SDK est un **fallback**. La valeur réelle arrive par chaque agent.
 
-`extra_hosts` du SDK : `extapi.openmfi.org:172.16.2.28`.
+`extra_hosts` du SDK : `extapi.<HUB_DOMAIN>:<HUB_EXTAPI>`.
 
 Vérif :
 
 ```bash
 curl -sS http://127.0.0.1:<PORT_INBOUND>/pm4ml-tenants
-# {"tenants":["clcam-calavi-test","clcam-jardins-test"]}
+# {"tenants":["<fspid>","<fspid>"]}
 ```
 
 ---
@@ -161,12 +160,12 @@ curl -sS http://127.0.0.1:<PORT_INBOUND>/pm4ml-tenants
 Pour chaque DFSP, `listen 443` :
 
 ```nginx
-server_name <DFSP_ID>.ext.openmfi.org;
+server_name <DFSP_ID>.ext.<HUB_DOMAIN>;
 # Tous vers LE MÊME inbound partagé
-proxy_pass http://172.25.2.117:<PORT_INBOUND_PARTAGE>;
+proxy_pass http://<SDK_HOST>:<PORT_INBOUND_PARTAGE>;
 ```
 
-`mcm-<id>.ext.openmfi.org` → `:<MCM_HOST_PORT>` de **cet** agent (ports différents).
+`mcm-<id>.ext.<HUB_DOMAIN>` → `:<MCM_HOST_PORT>` de **cet** agent (ports différents).
 
 HTTP `:80` : ajouter les FQDN au `server_name` du `return 301 https://…`.
 
@@ -180,8 +179,8 @@ HTTP `:80` : ajouter les FQDN au `server_name` du `return 301 https://…`.
 
 | Action | URL |
 |--------|-----|
-| Lookup / transfert **en tant que** calavi-test | `http://172.25.2.117:<OUT>/clcam-calavi-test/parties/…` et `…/transfers` |
-| Idem jardins-test | `http://172.25.2.117:<OUT>/clcam-jardins-test/transfers` |
+| Lookup / transfert **en tant que** calavi-test | `http://<SDK_HOST>:<OUT>/<fspid>/parties/…` et `…/transfers` |
+| Idem jardins-test | `http://<SDK_HOST>:<OUT>/<fspid>/transfers` |
 
 Sans préfixe, le SDK ne sait pas quel `dfspId` / JWS / backend utiliser.
 
@@ -192,8 +191,8 @@ Inbound Hub : **pas** de préfixe (`/quotes`, `/parties`).
 ## 8. Tests après branchement
 
 1. `GET /pm4ml-tenants` contient tous les `DFSP_ID`.
-2. Lookup Moov (`:6001`) d’un alias mappé vers le DFSP → `fspId` correct, `COMPLETED`.
-3. `POST /transfers` Moov → DFSP → `COMPLETED` (comme calavi-test / jardins-test en stacks séparés).
+2. Lookup <fspid> (`:6001`) d’un alias mappé vers le DFSP → `fspId` correct, `COMPLETED`.
+3. `POST /transfers` <fspid> → DFSP → `COMPLETED` (comme calavi-test / jardins-test en stacks séparés).
 4. Logs SDK : pas de `http://http://`, pas de `//host`, pas de `restart()` inbound à chaque NOTIFY.
 5. Quote 1001 + Axios 400 : callback MCM encore en `http://` (301 WAF).
 

@@ -16,12 +16,12 @@ Trois facteurs structurels :
 2. **Stockage unique partagé** (`sda`, 300 Go) sollicité par plusieurs VM.
 3. **etcd à instance unique** (un control plane), sans quorum.
 
-Le cluster s’est stabilisé après l’arrêt de `ml-cc-m-0` et `cmcalavi-sdk-node` : **contournement**, pas une correction. Récidive dès que l’I/O remonte.
+Le cluster s’est stabilisé après l’arrêt de `ml-cc-m-0` et `<SDK_NODE>` : **contournement**, pas une correction. Récidive dès que l’I/O remonte.
 
 ```
 Contention I/O sda (fsync 300–450 ms)
         → etcd : context deadline exceeded
-        → etcd session closed → VIP 172.16.2.25 retiré
+        → etcd session closed → VIP <KUBE_API_VIP> retiré
         → API :6443 « no route to host »
         → CrashLoopBackOff en cascade
 ```
@@ -42,7 +42,7 @@ Chronologie Talos `ml-test-c-0` (30/07/2026 UTC) : health etcd OK 15:36 → dead
 
 Hôte : load 21–23 / 32 vCPU ; steal ~0 ; RAM 128 Go (~90 Go used) ; 5 VM KVM dont 4 à ~18 Go RSS.  
 `sda` = QEMU HARDDISK ; `systemd-detect-virt` = kvm ; hébergeur VM `mojaloop` = Sonatel.  
-PSI I/O VM `106` (`cmcalavi-sdk-node`) Full ~15–35 %.
+PSI I/O VM `106` (`<SDK_NODE>`) Full ~15–35 %.
 
 Redémarrages K8s : `vault-2` 537 ; handlers moja ~203–206 ; psmdb-operator 122 ; OpenEBS 111 ; redis-operator 103 ; kube-controller/scheduler 15–16. Uptime `ml-test-c-0` 50 min vs cluster 2 j → control plane **redémarré**.
 
@@ -63,7 +63,7 @@ Court terme : ne pas lancer `ml-cc` + SDK + `ml-test` sans `iostat`. Moyen terme
 
 **F4 — SPOF hôte + disque.** Profil `tps-1` : tous les placement groups sur le nœud Proxmox `mojaloop` / `sda`. Une panne = control plane + workers + Hub. Documenter « pas de HA » ou répartir 2–3 hôtes.
 
-**F5 — Co-hébergement sans isolation I/O.** `ml-cc-m-0`, `cmcalavi-sdk-node`, CT101 et `ml-test` (4 VM) sur le même `sda`. Stabilité seulement après arrêt ml-cc + SDK. QoS Proxmox `mbps_*` / `iops_*` ; disque CP dédié ; règle d’exploitation (quelles VM en parallèle).
+**F5 — Co-hébergement sans isolation I/O.** `ml-cc-m-0`, `<SDK_NODE>`, CT101 et `ml-test` (4 VM) sur le même `sda`. Stabilité seulement après arrêt ml-cc + SDK. QoS Proxmox `mbps_*` / `iops_*` ; disque CP dédié ; règle d’exploitation (quelles VM en parallèle).
 
 ### Moyen
 
@@ -81,7 +81,7 @@ Court terme : ne pas lancer `ml-cc` + SDK + `ml-test` sans `iostat`. Moyen terme
 
 ### Faible
 
-**F12 — `talosconfig` par défaut vers `172.16.2.100`.** Faux « no route ». `TALOSCONFIG` / `talosctl config info`.
+**F12 — `talosconfig` par défaut vers `<TALOSCONFIG_STALE>`.** Faux « no route ». `TALOSCONFIG` / `talosctl config info`.
 
 **F13 — talosctl 1.13.5 vs nœuds 1.13.3.** Aligner.
 
@@ -124,6 +124,6 @@ cluster:
       election-timeout: "5000"
 ```
 
-Hors infra : un PUT /parties error 400 sans `errorCode` (cmcalavi) est applicatif ; la PSI I/O du SDK peut aggraver, non démontré.
+Hors infra : un PUT /parties error 400 sans `errorCode` (<fspid>) est applicatif ; la PSI I/O du SDK peut aggraver, non démontré.
 
 Limites : iostat court ; logs etcd natifs non lus ; type stockage Sonatel non confirmé ; intégrité Vault/Mongo après crash non auditée.

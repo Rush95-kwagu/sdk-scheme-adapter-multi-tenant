@@ -95,7 +95,26 @@
           <span class="badge">overlay</span>
         </div>
         <h2>Du Hub aux transferts</h2>
-        <p class="lead">Trois couches : le <strong>Hub</strong> (Control Center / cluster de test IaC), le <strong>SDK mono-tenant</strong> du toolkit, l’<strong>overlay multi-tenant</strong>. Les IPs lab sont sous <em>Contexte actuel</em>.</p>
+        <p class="lead">Trois couches : le <strong>Hub</strong> (Control Center / cluster de test IaC), le <strong>SDK mono-tenant</strong> du toolkit, l’<strong>overlay multi-tenant</strong>. Les commandes utilisent des <strong>placeholders</strong> ; un exemple fictif figure ci-dessous.</p>
+        <div class="ctx">
+          <strong>Placeholders — exemple fictif (RFC 5737)</strong>
+          <table>
+            <tr><th>Nom</th><th>Rôle</th><th>Exemple (ne pas copier tel quel en prod)</th></tr>
+            <tr><td><code>&lt;fspid&gt;</code></td><td>Nom ledger <code>participant.name</code></td><td><code>dfsp-a</code>, <code>dfsp-b</code></td></tr>
+            <tr><td><code>&lt;SDK_HOST&gt;</code></td><td>Nœud Docker SDK</td><td><code>192.0.2.117</code></td></tr>
+            <tr><td><code>&lt;WAF_WAN&gt;</code></td><td>IP publique WAF</td><td><code>203.0.113.90</code></td></tr>
+            <tr><td><code>&lt;KUBE_API_VIP&gt;</code></td><td>VIP API Kubernetes (switch)</td><td><code>192.0.2.25</code></td></tr>
+            <tr><td><code>&lt;HUB_EXTAPI&gt;</code></td><td>FSPIOP Hub</td><td><code>192.0.2.28</code></td></tr>
+            <tr><td><code>&lt;HUB_HYDRA&gt;</code></td><td>Hydra / MCM (gw-ext)</td><td><code>192.0.2.26</code></td></tr>
+            <tr><td><code>&lt;CBS_HOST&gt;</code></td><td>CBS / connecteur</td><td><code>192.0.2.16</code></td></tr>
+            <tr><td><code>&lt;PVE_HOST&gt;</code></td><td>Hôte Proxmox</td><td><code>192.0.2.10</code></td></tr>
+            <tr><td><code>&lt;BRIDGE_IP&gt;</code></td><td>Pont VM</td><td><code>192.0.2.1</code></td></tr>
+            <tr><td><code>&lt;CLUSTER_VIP&gt;</code></td><td>VIP Talos / API ml-cc</td><td><code>192.0.2.20</code></td></tr>
+            <tr><td><code>&lt;LAN_CIDR&gt;</code></td><td>Réseau LAN</td><td><code>192.0.2.0/24</code></td></tr>
+            <tr><td><code>&lt;HUB_DOMAIN&gt;</code></td><td>Zone DNS du scheme</td><td><code>scheme.example</code></td></tr>
+            <tr><td><code>&lt;DFSP_FQDN&gt;</code></td><td>FQDN WAF du DFSP</td><td><code>dfsp-a.ext.scheme.example</code></td></tr>
+          </table>
+        </div>
         <div class="cards three">
           <div class="card">
             <h3>Hub Mojaloop</h3>
@@ -110,7 +129,7 @@
             <p>Conteneur <code>sdk-fececam</code>, image <code>sdk-scheme-adapter-multi-dfsp</code>. Un process, N agents. Build : <code>just build</code>. Voir <a href="#valeur">Mono vs overlay</a>.</p>
           </div>
         </div>
-        <div class="note">URLs : <strong>https://docs.ext.openmfi.org/documentation</strong> (WAF) · <code>http://172.25.2.117/documentation</code> (VM, LAN).</div>
+        <div class="note">URLs : <strong>https://docs.ext.<HUB_DOMAIN>/documentation</strong> (WAF) · <code>http://<SDK_HOST>/documentation</code> (VM, LAN).</div>
         <p>Argent en jeu : un transfert vert ne suffit pas. Voir <a href="#risques">Risques transferts</a> (Hub, WAF, Vault, overlay) classés élevé / moyen / faible.</p>
       </section>
 
@@ -126,11 +145,11 @@
         <p>Cible DNS publique : l’annotation <code>external-dns.alpha.kubernetes.io/target</code> est la seule valeur envoyée au DNS. Cilium reste privé. <code>*.int</code> → IP LAN du gateway interne. <code>*.ext</code> de <em>ce</em> cluster → <code>wan</code> (IP de bordure).</p>
         <p>Guide générique toolkit : <code>docs/adopter/deployment-cc.md</code>. Source lab : <code>docs/adopter/deployment-cc-lab-openmfi.md</code>. Nested Sonatel→Proxmox→Talos et I/O etcd : <a href="#risques-infra">risques infra</a>.</p>
         <div class="ctx">
-          <strong>Contexte actuel — lab openmfi (validé)</strong>
+          <strong>Contexte actuel — lab (zone <HUB_DOMAIN>) (validé)</strong>
           <table>
             <tr><th>Objet</th><th>Adresse cluster</th><th>Cible DNS</th></tr>
-            <tr><td><code>gw-int</code></td><td><code>192.168.0.211</code></td><td><code>192.168.0.211</code> (pas de <code>wan</code>)</td></tr>
-            <tr><td><code>gw-ext</code></td><td><code>192.168.0.212</code></td><td><code>wan</code> : d’abord <code>192.168.0.154</code>, puis public <code>41.214.65.90</code></td></tr>
+            <tr><td><code>gw-int</code></td><td><code><GW_INT_LAN></code></td><td><code><GW_INT_LAN></code> (pas de <code>wan</code>)</td></tr>
+            <tr><td><code>gw-ext</code></td><td><code><GW_EXT_LAN></code></td><td><code>wan</code> : d’abord <code><PVE_HOST></code>, puis public <code><WAF_WAN></code></td></tr>
           </table>
           <p>Kustomizations Ready : <code>platform</code>, <code>dns</code>, <code>platform-config</code>, <code>talos</code>, <code>tooling</code>, <code>tooling-config</code>, <code>tooling-observability</code>, <code>tooling-observability-routes</code>, <code>tooling-routes</code>.</p>
         </div>
@@ -146,32 +165,34 @@
           <strong>Contexte actuel — hôte Proxmox <code>monproxmox</code></strong>
           <table>
             <tr><th>Interface</th><th>Adresse</th><th>Rôle</th></tr>
-            <tr><td><code>eno1</code></td><td><code>192.168.0.154/24</code></td><td>LAN physique, GW <code>192.168.0.1</code>, SSH, Internet</td></tr>
-            <tr><td><code>vmbr0</code></td><td><code>192.168.0.254/24</code></td><td>Pont Talos, aucune NIC esclave</td></tr>
-            <tr><td><code>tailscale0</code></td><td><code>100.73.74.15/32</code></td><td>Admin</td></tr>
+            <tr><td><code>eno1</code></td><td><code><PVE_HOST>/24</code></td><td>LAN physique, GW <code><LAN_GW></code>, SSH, Internet</td></tr>
+            <tr><td><code>vmbr0</code></td><td><code><BRIDGE_IP>/24</code></td><td>Pont Talos, aucune NIC esclave</td></tr>
+            <tr><td><code>tailscale0</code></td><td><code><TAILSCALE_IP>/32</code></td><td>Admin</td></tr>
           </table>
           <p>Plan <code>ml-cc</code> (exclure du DHCP : GW physique, hôte, VIP, LB) :</p>
           <table>
             <tr><th>Adresse</th><th>Usage</th></tr>
-            <tr><td><code>192.168.0.1</code></td><td>Passerelle LAN physique</td></tr>
-            <tr><td><code>192.168.0.154</code></td><td>Hôte <code>eno1</code></td></tr>
-            <tr><td><code>192.168.0.254</code></td><td>Hôte pont : GW / DNS / DHCP des VM</td></tr>
-            <tr><td><code>192.168.0.210</code></td><td><code>cluster.vip</code> (API K8s)</td></tr>
-            <tr><td><code>192.168.0.211</code> / <code>.212</code></td><td><code>gw-int.lan</code> / <code>gw-ext.lan</code></td></tr>
-            <tr><td><code>192.168.0.180</code>–<code>.220</code></td><td>Pool DHCP (<code>ml-cc-m-0</code> a eu <code>.200</code>)</td></tr>
-            <tr><td><code>41.214.65.90</code></td><td><code>gw-ext.wan</code></td></tr>
+            <tr><td><code><LAN_GW></code></td><td>Passerelle LAN physique</td></tr>
+            <tr><td><code><PVE_HOST></code></td><td>Hôte <code>eno1</code></td></tr>
+            <tr><td><code><BRIDGE_IP></code></td><td>Hôte pont : GW / DNS / DHCP des VM</td></tr>
+            <tr><td><code><CLUSTER_VIP></code></td><td><code>cluster.vip</code> (API K8s)</td></tr>
+            <tr><td><code>&lt;GW_INT_LAN&gt;</code> / <code>&lt;GW_EXT_LAN&gt;</code></td><td><code>gw-int.lan</code> / <code>gw-ext.lan</code></td></tr>
+            <tr><td><code>&lt;DHCP_START&gt;</code>–<code>&lt;DHCP_END&gt;</code></td><td>Pool DHCP</td></tr>
+            <tr><td><code><WAF_WAN></code></td><td><code>gw-ext.wan</code></td></tr>
           </table>
-          <p><code>ml-test</code> : autre VIP et autre LB-IPAM, sans recouvrir <code>.210</code>–<code>.212</code>.</p>
+          <p><code>ml-test</code> : autre VIP et autre LB-IPAM, sans recouvrir les adresses de <code>ml-cc</code>.</p>
         </div>
 
         <h3>Routes et NAT (avant le premier boot Talos)</h3>
         <p>Session console Proxmox ou Tailscale — pas seulement SSH sur l’IP <code>eno1</code> (le NAT peut vous couper).</p>
-<pre><code>for i in $(seq 180 220); do
-  ip route replace 192.168.0.$i/32 dev vmbr0 src 192.168.0.254
+<pre><code># Exemple fictif : LAN_PREFIX=192.0.2  DHCP 50–90  BRIDGE_IP=192.0.2.1
+LAN_PREFIX=192.0.2
+for i in $(seq 50 90); do
+  ip route replace ${LAN_PREFIX}.$i/32 dev vmbr0 src &lt;BRIDGE_IP&gt;
 done
-ip route replace 192.168.0.210/32 dev vmbr0 src 192.168.0.254
-ip route replace 192.168.0.211/32 dev vmbr0 src 192.168.0.254
-ip route replace 192.168.0.212/32 dev vmbr0 src 192.168.0.254
+ip route replace <CLUSTER_VIP>/32 dev vmbr0 src <BRIDGE_IP>
+ip route replace <GW_INT_LAN>/32 dev vmbr0 src <BRIDGE_IP>
+ip route replace <GW_EXT_LAN>/32 dev vmbr0 src <BRIDGE_IP>
 
 sysctl -w net.ipv4.ip_forward=1
 sysctl -w net.ipv4.conf.all.rp_filter=0
@@ -180,29 +201,29 @@ sysctl -w net.ipv4.conf.eno1.rp_filter=0
 
 iptables -I FORWARD 1 -i vmbr0 -o eno1 -j ACCEPT
 iptables -I FORWARD 1 -i eno1 -o vmbr0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -t nat -I POSTROUTING 1 -m iprange --src-range 192.168.0.180-192.168.0.220 \
-  -o eno1 -j SNAT --to-source 192.168.0.154
+iptables -t nat -I POSTROUTING 1 -m iprange --src-range <DHCP_START>-<DHCP_END> \
+  -o eno1 -j SNAT --to-source <PVE_HOST>
 iptables -I INPUT -i vmbr0 -p udp --dport 53 -j ACCEPT
 iptables -I INPUT -i vmbr0 -p udp --dport 67 -j ACCEPT
 
-ip route get 192.168.0.200
-# attendu : dev vmbr0 src 192.168.0.254
+ip route get <VM_DHCP_EX>
+# attendu : dev vmbr0 src <BRIDGE_IP>
 </code></pre>
-        <div class="warn">Ne pas NAT <code>192.168.0.180/27</code> : iptables aligne sur <code>192.168.0.160/27</code> et <strong>exclut</strong> <code>.200</code>. Utiliser <code>/32</code> ou <code>iprange</code>. Ces règles disparaissent au reboot hôte.</div>
-        <p>Contrôle : <code>tcpdump -n -i eno1 host 1.1.1.1</code> pendant un ping VM → source <code>192.168.0.154</code>, pas <code>.200</code>.</p>
+        <div class="warn">Ne pas NAT un préfixe trop large (<code>/27</code> mal aligné) : il peut <strong>exclure</strong> des adresses du pool. Utiliser <code>/32</code> ou <code>iprange</code>. Ces règles disparaissent au reboot hôte.</div>
+        <p>Contrôle : <code>tcpdump -n -i eno1 host 1.1.1.1</code> pendant un ping VM → source <code>&lt;PVE_HOST&gt;</code>, pas l’IP de la VM.</p>
 
         <h3>DHCP (Kea ou dnsmasq)</h3>
         <p>Écoute sur le pont. Passerelle annoncée = IP de l’hôte <strong>sur le pont</strong>, pas la GW du LAN physique (injoignable depuis le pont isolé).</p>
 <pre><code>sudo apt update &amp;&amp; sudo apt install -y kea-dhcp4-server
 # /etc/kea/kea-dhcp4.conf — interfaces: vmbr0
-# subnet 192.168.0.0/24
-# pool 192.168.0.180 - 192.168.0.220
-# routers + domain-name-servers = 192.168.0.254
+# subnet <LAN_CIDR>   # ex. 192.0.2.0/24
+# pool <DHCP_START> - <DHCP_END>
+# routers + domain-name-servers = <BRIDGE_IP>
 sudo systemctl enable --now kea-dhcp4-server
 </code></pre>
-        <p>Le lab d’octobre a aussi marché avec <strong>dnsmasq</strong> : <code>interface=vmbr0</code>, <code>dhcp-range=192.168.0.180,192.168.0.220</code>, <code>dhcp-option=option:router,192.168.0.254</code>. Kea ne corrige pas le routage : si <code>ip route get .200</code> sort par <code>eno1</code>, Offer jamais vu sur le pont.</p>
+        <p>Le lab a aussi marché avec <strong>dnsmasq</strong> : <code>interface=vmbr0</code>, <code>dhcp-range=&lt;DHCP_START&gt;,&lt;DHCP_END&gt;</code>, <code>dhcp-option=option:router,&lt;BRIDGE_IP&gt;</code>. Kea ne corrige pas le routage : si <code>ip route get &lt;VM_DHCP_EX&gt;</code> sort par <code>eno1</code>, Offer jamais vu sur le pont.</p>
 <pre><code>tcpdump -n -i vmbr0 port 67 or port 68
-# Discover MAC VM, puis Offer depuis 192.168.0.254
+# Discover MAC VM, puis Offer depuis <BRIDGE_IP>
 </code></pre>
       </section>
 
@@ -233,7 +254,7 @@ sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
         <h3>Proxmox</h3>
         <div class="ctx">
-          <strong>Contexte actuel</strong> — nœud <code>monproxmox</code>, UI <code>https://192.168.0.154:8006</code>, datastore <code>local</code> (pas de <code>local-lvm</code>).
+          <strong>Contexte actuel</strong> — nœud <code>monproxmox</code>, UI <code>https://<PVE_HOST>:8006</code>, datastore <code>local</code> (pas de <code>local-lvm</code>).
         </div>
 <pre><code>pvesm set local --content iso,vztmpl,backup,snippets,images,rootdir
 
@@ -262,7 +283,7 @@ export DTK_DEV_ALLOW_UNTAGGED=1   # seulement hors tag de release
 </code></pre>
 
         <h3><code>.env</code> (ne pas committer)</h3>
-<pre><code>PROXMOX_VE_ENDPOINT="https://192.168.0.154:8006"
+<pre><code>PROXMOX_VE_ENDPOINT="https://<PVE_HOST>:8006"
 PROXMOX_VE_API_TOKEN="terraform-toolkit@pve!mojaloop-token=&lt;secret&gt;"
 PROXMOX_VE_SSH_USERNAME="root"
 PROXMOX_VE_SSH_PASSWORD='&lt;mot de passe root&gt;'
@@ -278,20 +299,20 @@ OCI_REPO_PASSWORD="&lt;PAT read:packages&gt;"
 cluster:
   name: "ml-cc"
   role: "tooling"
-  vip: "192.168.0.210"
+  vip: "<CLUSTER_VIP>"
   lb_ipam:
     pools:
       gw-int:
-        lan: "192.168.0.211"
+        lan: "<GW_INT_LAN>"
       gw-ext:
-        lan: "192.168.0.212"
-        wan: "41.214.65.90"    # omis ⇒ DNS = lan
+        lan: "<GW_EXT_LAN>"
+        wan: "<WAF_WAN>"    # omis ⇒ DNS = lan
 template: "dev"
 infra:
   provider: "proxmox"
 dns:
   provider: "cloudflare"
-  domain: "openmfi.org"
+  domain: "<HUB_DOMAIN>"
 cert:
   email: "ops@example.com"
   server: "https://acme-v02.api.letsencrypt.org/directory"
@@ -318,13 +339,13 @@ storage:
   images: "local"
   snippets: "local"
 </code></pre>
-        <p><code>talos.yaml</code> : résolveur = IP pont (ici <code>192.168.0.254</code>). Kea/dnsmasq ne remplace pas cette valeur dans la machine config.</p>
+        <p><code>talos.yaml</code> : résolveur = IP pont (ici <code><BRIDGE_IP></code>). Kea/dnsmasq ne remplace pas cette valeur dans la machine config.</p>
 
         <h3><code>ml-test</code></h3>
         <ul class="check">
           <li>Autre répertoire <code>environments/ml-test/</code>, <code>ENV=ml-test</code>.</li>
           <li><code>cluster.name: ml-test</code>, VIP / <code>lan</code> libres.</li>
-          <li><code>dns.domain</code> <strong>différent</strong> (<code>test.openmfi.org</code> ou autre zone).</li>
+          <li><code>dns.domain</code> <strong>différent</strong> (<code>test.<HUB_DOMAIN></code> ou autre zone).</li>
           <li><code>gw-ext.wan</code> peut être la <strong>même</strong> IP publique. Interdit : deux external-dns <code>sync</code> sur les <em>mêmes noms</em>.</li>
         </ul>
         <p>Si <code>ml-cc</code> a effacé des records d’une instance déjà en service :</p>
@@ -354,7 +375,7 @@ kubectl get pods -A
       <section id="hub-dns" class="section">
         <h2>Hub — DNS, interfaces, pannes</h2>
         <ol class="steps">
-          <li>Zone déléguée au provider DNS (lab : Cloudflare <code>openmfi.org</code>).</li>
+          <li>Zone déléguée au provider DNS (lab : Cloudflare <code><HUB_DOMAIN></code>).</li>
           <li>Jeton édition DNS dans <code>CLOUDFLARE_API_TOKEN</code>.</li>
           <li>Ne pas réutiliser les noms d’un autre cluster.</li>
         </ol>
@@ -363,14 +384,14 @@ kubectl get pods -A
 kubectl -n platform-system get gateway gw-ext -o yaml | grep target
 kubectl -n platform-system get gateway gw-int -o yaml | grep target
 kubectl -n external-dns logs deploy/external-dns-external-dns --tail=40
-# gw-ext → 41.214.65.90   gw-int → 192.168.0.211
+# gw-ext → <WAF_WAN>   gw-int → <GW_INT_LAN>
 </code></pre>
 
         <h3>Interfaces (HTTPRoutes prêtes)</h3>
         <table>
           <tr><th>Noms</th><th>Gateway</th><th>DNS lab</th></tr>
-          <tr><td><code>grafana.int</code>, <code>harbor.int</code>, <code>minio.int</code>, <code>vault.int</code>, <code>s3.int</code></td><td><code>gw-int</code></td><td><code>192.168.0.211</code></td></tr>
-          <tr><td><code>loki.ext</code>, <code>tempo.ext</code>, <code>thanos.ext</code></td><td><code>gw-ext</code></td><td><code>41.214.65.90</code></td></tr>
+          <tr><td><code>grafana.int</code>, <code>harbor.int</code>, <code>minio.int</code>, <code>vault.int</code>, <code>s3.int</code></td><td><code>gw-int</code></td><td><code><GW_INT_LAN></code></td></tr>
+          <tr><td><code>loki.ext</code>, <code>tempo.ext</code>, <code>thanos.ext</code></td><td><code>gw-ext</code></td><td><code><WAF_WAN></code></td></tr>
         </table>
         <p>Mots de passe : <code>make secrets ENV=ml-cc</code> (Grafana / Harbor <code>admin</code>, MinIO <code>minioadmin</code>).</p>
 
@@ -410,7 +431,7 @@ securityContext:
 
         <h3>Checklist</h3>
         <ul class="check">
-          <li><code>ip route get 192.168.0.200</code> → <code>dev vmbr0</code></li>
+          <li><code>ip route get <VM_DHCP_EX></code> → <code>dev vmbr0</code></li>
           <li>DHCP : pool, routeur et DNS pont ; VIP et LB exclus</li>
           <li>SNAT VM → IP NIC ; FORWARD pont ↔ NIC</li>
           <li>Stockage <code>local</code> : snippets + images</li>
@@ -474,21 +495,23 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
 </code></pre>
         <h3>Commandes</h3>
 <pre><code># Simulation purge (défaut) + SQL de relecture
-./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql cmcalavi
+./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql &lt;fspid&gt;
 
 # Réinit (DFSP conservé) — dry-run
-./scripts/hub/mojaloop-purge-dfsp.sh --reset --sql-out /tmp/reset-dry.sql cmcalavi
+./scripts/hub/mojaloop-purge-dfsp.sh --reset --sql-out /tmp/reset-dry.sql &lt;fspid&gt;
 
 # Réinit réelle (etcd ok, tapez REINITIALISER)
-./scripts/hub/mojaloop-purge-dfsp.sh --reset --execute --scale-down cmcalavi
+./scripts/hub/mojaloop-purge-dfsp.sh --reset --execute --scale-down &lt;fspid&gt;
+# exemple fictif : … --reset --execute --scale-down dfsp-a
 
 # Plusieurs inactifs / tests (exemple lab) — purge
 ./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql \
-  cmparakou CMCOTONOU test1 test2 mojacom2026
+  <fspid> [<fspid2> …]
 
 # Purge réelle : --execute (pas --excute)
 ./scripts/hub/mojaloop-purge-dfsp.sh --execute --scale-down \
-  cmparakou CMCOTONOU test1 test2 mojacom2026
+  <fspid> [<fspid2> …]
+# exemple fictif : … --execute --scale-down dfsp-a dfsp-b
 </code></pre>
         <table>
           <tr><th>Option</th><th>Effet</th></tr>
@@ -514,7 +537,7 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
         </ul>
         <div class="ctx">
           <strong>Contexte actuel — lab</strong>
-          Cluster switch <code>ml-test</code>, VIP API <code>172.16.2.25</code>. Lancer le script depuis une machine qui a <code>kubectl</code> vers ce cluster (hôte Proxmox / bastion), pas depuis le seul nœud SDK.
+          Cluster switch (ex. <code>ml-test</code>), VIP API <code>&lt;KUBE_API_VIP&gt;</code> (exemple fictif <code>192.0.2.25</code>). Lancer le script depuis une machine qui a <code>kubectl</code> vers ce cluster (hôte Proxmox / bastion), pas depuis le seul nœud SDK.
         </div>
       </section>
 
@@ -577,7 +600,7 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
         <h3>Que fait vraiment <code>MULTI_DFSP</code> dans le SDK mono ?</h3>
         <p>Dans le code officiel, <code>MULTI_DFSP</code> n’ouvre <strong>pas</strong> un second agent et ne stocke pas N certificats. Il change le <em>routage de chemin</em> :</p>
         <ul class="check">
-          <li>Inbound : le premier segment d’URL est interprété comme <code>dfspId</code> ; le Hub devrait appeler <code>/gto/parties/…</code> au lieu de <code>/parties/…</code>.</li>
+          <li>Inbound : le premier segment d’URL est interprété comme <code>dfspId</code> ; le Hub devrait appeler <code>/<fspid>/parties/…</code> au lieu de <code>/parties/…</code>.</li>
           <li>Vers le CBS : le SDK concatène <code>{BACKEND_ENDPOINT}/{dfspId}</code> (ex. un connecteur unique avec un tenant par préfixe).</li>
           <li>Un seul ControlAgent, un seul <code>DFSP_ID</code> d’environnement, un seul restart à chaque NOTIFY.</li>
         </ul>
@@ -587,7 +610,7 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
         <table>
           <tr><th>Problème du SDK officiel 1:1</th><th>Valeur ajoutée overlay</th></tr>
           <tr><td>N processus SDK, N Redis, N ports inbound Hub</td><td>1 process, 1 Redis overlay, 1 couple <code>:11000</code> / <code>:11001</code></td></tr>
-          <tr><td>NOTIFY d’un DFSP redémarre tout le HTTP du process</td><td>Un NOTIFY <code>gto</code> n’interrompt pas <code>cmcalavi</code></td></tr>
+          <tr><td>NOTIFY d’un DFSP redémarre tout le HTTP du process</td><td>Un NOTIFY <code><fspid></code> n’interrompt pas <code><fspid></code></td></tr>
           <tr><td>Impossible de servir 2 mcm-agents (certs / Host)</td><td><code>DfspConfigStore</code> : PEM, JWS, backend <em>par requête</em></td></tr>
           <tr><td>WAF : un <code>proxy_pass</code> par port SDK</td><td>Tous les FQDN overlay → le <strong>même</strong> inbound</td></tr>
           <tr><td>Cutover = nouvelle VM ou nouveau couple de ports</td><td>Agent running + <code>just build</code> + WAF vers <code>sdk-fececam</code></td></tr>
@@ -596,7 +619,7 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
 
         <h3>Quand rester en SDK dédié</h3>
         <ul class="check">
-          <li>DFSP prod sensible (lab : <code>moov</code> sur <code>:6000</code>) hors overlay tant que le cutover n’est pas validé.</li>
+          <li>DFSP prod sensible (lab : <code><fspid></code> sur <code>:6000</code>) hors overlay tant que le cutover n’est pas validé.</li>
           <li>Besoin d’isoler la panne : un crash SDK overlay touche N caisses.</li>
           <li>CBS / WAF pas encore prêts pour le préfixe outbound <code>/{dfspId}/</code>.</li>
         </ul>
@@ -638,13 +661,13 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
         <h3>Deux artefacts toolkit</h3>
         <table>
           <tr><th>Voie</th><th>Quand</th><th>Docs sources</th></tr>
-          <tr><td>Docker Compose lab</td><td>Nœud Linux, openmfi, plusieurs DFSP sur le même host</td><td><code>docs/participant/dfsp-onboarding-compose-lab.md</code> + <code>examples/*-docker-compose.yml</code></td></tr>
+          <tr><td>Docker Compose lab</td><td>Nœud Linux, zone <code>&lt;HUB_DOMAIN&gt;</code>, plusieurs DFSP sur le même host</td><td><code>docs/participant/dfsp-onboarding-compose-lab.md</code> + <code>examples/*-docker-compose.yml</code></td></tr>
           <tr><td>Helm chart <code>dfsp/</code></td><td>Cluster K8s du participant, LoadBalancer inbound</td><td><code>docs/participant/installation.md</code></td></tr>
         </table>
         <p>« Multi-DFSP » dans le toolkit Compose = <strong>N projets</strong> (<code>manage.sh</code> par répertoire), pas <code>MULTI_DFSP=true</code> dans un seul SDK. Voir <a href="#valeur">Mono vs overlay</a>.</p>
         <div class="ctx">
-          <strong>Contexte actuel — lab openmfi</strong>
-          Nœud <code>172.25.2.117</code>, WAF <code>41.214.65.90</code>, extapi <code>172.16.2.28</code>. Stacks 1:1 encore hors overlay : <code>moov</code> <code>:6000</code>, <code>mtn</code>, clcam-*, etc. Overlay (cmcalavi, gto, moov-test) : voir déploiement overlay.
+          <strong>Contexte actuel — lab (zone <HUB_DOMAIN>)</strong>
+          Nœud <code>&lt;SDK_HOST&gt;</code> (ex. <code>192.0.2.117</code>), WAF <code>&lt;WAF_WAN&gt;</code> (ex. <code>203.0.113.90</code>), extapi <code>&lt;HUB_EXTAPI&gt;</code>. Overlay et stacks 1:1 peuvent cohabiter : ne pas arrêter un autre <code>&lt;fspid&gt;</code> pour un cutover.
         </div>
       </section>
 
@@ -670,11 +693,11 @@ git clone &lt;repo-ml-deployment-toolkit&gt;
         <ul class="check">
           <li>MCM, Hydra <code>client_credentials</code>, Keto, central-ledger, ALS, quoting, transfers.</li>
           <li>Hub CA, Hub JWS, Hub servercerts (Status agent sinon bloqué).</li>
-          <li>FQDN FSPIOP mTLS (lab : <code>extapi.openmfi.org</code>), zone (lab : <code>XOF</code>).</li>
+          <li>FQDN FSPIOP mTLS (lab : <code>extapi.<HUB_DOMAIN></code>), zone (lab : <code>XOF</code>).</li>
         </ul>
-<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.openmfi.org/pm4mlapi/health
+<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.<HUB_DOMAIN>/pm4mlapi/health
 # 200
-curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
+curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
   -d 'grant_type=client_credentials' -d 'client_id=&lt;DFSP_ID&gt;' -d 'client_secret=&lt;SECRET&gt;'
 </code></pre>
 
@@ -699,7 +722,7 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
         </ul>
         <div class="ctx">
           <strong>Contexte actuel</strong>
-          extra_hosts agent : hydra/mcm → <code>41.214.65.90</code>, extapi → <code>172.16.2.28</code>. OpenCBS exemple <code>172.16.2.16:8100/mojaloop</code>. Prochain couple de ports libre historiquement : 10200/10201/10203 (moov-test l’a pris).
+          extra_hosts agent : hydra/mcm → <code><WAF_WAN></code>, extapi → <code><HUB_EXTAPI></code>. OpenCBS exemple <code><CBS_HOST>:8100/mojaloop</code>. Prochain couple de ports libre historiquement : 10200/10201/10203 (<fspid> l’a pris).
         </div>
       </section>
 
@@ -707,14 +730,14 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
         <h2>Déploiement Compose — SDK 1:1</h2>
         <p>Un répertoire <code>deploy/</code> par DFSP. Ne jamais lancer deux stacks depuis le même dossier ni avec le même <code>name:</code> Compose.</p>
 <pre><code>export DFSP_ID=acme
-export DFSP_FQDN=${DFSP_ID}.ext.openmfi.org
-export SDK_HOST=172.25.2.117
-export WAF_IP=41.214.65.90
+export DFSP_FQDN=${DFSP_ID}.ext.<HUB_DOMAIN>
+export SDK_HOST=<SDK_HOST>
+export WAF_IP=<WAF_WAN>
 export PORT_IN=10200
 export PORT_OUT=10201
 export PORT_MET=10240
 export PORT_MCM=10203
-export CBS_BACKEND=172.16.2.16:8100/mojaloop
+export CBS_BACKEND=<CBS_HOST>:8100/mojaloop
 export DEPLOY=~/dfsp-${DFSP_ID}-mojaloop/sdk-scheme-adapter/deploy
 export TOOLKIT=/chemin/ml-deployment-toolkit
 </code></pre>
@@ -728,14 +751,14 @@ export TOOLKIT=/chemin/ml-deployment-toolkit
 
         <h3>2. Arborescence et fichiers</h3>
 <pre><code>mkdir -p "${DEPLOY}/config/mcm-agent" "${DEPLOY}/scripts"
-cp "$TOOLKIT/docs/participant/examples/moov-test-docker-compose.yml" "${DEPLOY}/docker-compose.yml"
+cp "$TOOLKIT/docs/participant/examples/<fspid>-docker-compose.yml" "${DEPLOY}/docker-compose.yml"
 cp "$TOOLKIT/docs/participant/examples/manage.sh" "${DEPLOY}/manage.sh"
 cp "$TOOLKIT/docs/participant/examples/dfsp-mcm-agent-default.template.json" \
    "${DEPLOY}/config/mcm-agent/default.json"
-# vault-init.sh depuis un stack validé (gto / moov-test)
+# vault-init.sh depuis un stack validé (<fspid> / <fspid>)
 chmod +x "${DEPLOY}/manage.sh" "${DEPLOY}/scripts/vault-init.sh"
 </code></pre>
-        <p>Dans le compose : remplacer l’id d’exemple, les <code>container_name</code>, les ports hôtes, le <code>name:</code> du projet. <strong>Pas</strong> de subnet IPAM figé. Vault image 1.20.4 : <code>user: "100:100"</code>, <code>SKIP_SETCAP</code>, <code>disable_mlock</code> (les stacks anciens type gto peuvent encore être <code>0:0</code> s’ils bootent).</p>
+        <p>Dans le compose : remplacer l’id d’exemple, les <code>container_name</code>, les ports hôtes, le <code>name:</code> du projet. <strong>Pas</strong> de subnet IPAM figé. Vault image 1.20.4 : <code>user: "100:100"</code>, <code>SKIP_SETCAP</code>, <code>disable_mlock</code> (les stacks anciens type <fspid> peuvent encore être <code>0:0</code> s’ils bootent).</p>
         <p>SDK 1:1 <strong>inclus</strong> le service <code>sdk-scheme-adapter</code> :</p>
 <pre><code>    ports:
       - "${PORT_IN}:5000"
@@ -788,7 +811,7 @@ docker exec sdk-scheme-adapter-${DFSP_ID} wget -q --spider http://127.0.0.1:5040
 </code></pre>
 
         <h3>5. Status MCM 8/8</h3>
-        <p>UI : <code>http://${SDK_HOST}:${PORT_MCM}</code> puis <code>https://mcm-${DFSP_ID}.ext.openmfi.org</code> après WAF. Hub Admin : signer CSR inbound/outbound.</p>
+        <p>UI : <code>http://${SDK_HOST}:${PORT_MCM}</code> puis <code>https://mcm-${DFSP_ID}.ext.<HUB_DOMAIN></code> après WAF. Hub Admin : signer CSR inbound/outbound.</p>
 <pre><code>TOKEN=…   # client_credentials
 for p in /pm4mlapi/hub/ca /pm4mlapi/hub/jwscerts \
   /pm4mlapi/dfsps/jwscerts \
@@ -797,14 +820,14 @@ for p in /pm4mlapi/hub/ca /pm4mlapi/hub/jwscerts \
 do
   echo -n "$p → "
   curl -sk -o /tmp/b -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
-    "https://mcm.ext.openmfi.org$p"
+    "https://mcm.ext.<HUB_DOMAIN>$p"
   echo
 done
 </code></pre>
 
         <div class="ctx">
-          <strong>Contexte actuel — ports déjà pris sur 172.25.2.117</strong>
-          cmcalavi 4000/4001/3000 · gto 5000/5001/5003 · moov 6000/6001/6003 · mtn 7000/7001/7003 · clcam-jardin 8000/8003 · clcam-calavi 9000/9003 · clcam-calavi-test 10000/10001/10003 · clcam-jardins-test 10100/10101/10103 · moov-test 10200/10201/10203 (ensuite cutover overlay). Choisir le prochain couple libre.
+          <strong>Contexte actuel — ports déjà pris sur <SDK_HOST></strong>
+          <fspid> 4000/4001/3000 · <fspid> 5000/5001/5003 · <fspid> 6000/6001/6003 · <fspid> 7000/7001/7003 · <fspid> 8000/8003 · <fspid> 9000/9003 · <fspid> 10000/10001/10003 · <fspid> 10100/10101/10103 · <fspid> 10200/10201/10203 (ensuite cutover overlay). Choisir le prochain couple libre.
         </div>
       </section>
 
@@ -816,7 +839,7 @@ done
         <table>
           <tr><th>Champ</th><th>Valeur</th></tr>
           <tr><td><code>mcm.auth.tokenPath</code></td><td><code>/oauth2/token</code> (pas <code>/realms/dfsps/…</code>)</td></tr>
-          <tr><td><code>mcm.auth.tokenEndpoint</code></td><td><code>https://hydra.ext.openmfi.org/oauth2/token</code></td></tr>
+          <tr><td><code>mcm.auth.tokenEndpoint</code></td><td><code>https://hydra.ext.<HUB_DOMAIN>/oauth2/token</code></td></tr>
           <tr><td>Endpoints Hub</td><td><strong>Sans</strong> <code>:443</code></td></tr>
           <tr><td><code>sdk.fqdn</code> / <code>callbackUrl</code></td><td><code>https://&lt;DFSP_FQDN&gt;</code></td></tr>
           <tr><td><code>sdk.jws</code></td><td><code>sign: true</code>, <code>validateInbound: true</code> (aligné overlay)</td></tr>
@@ -849,10 +872,10 @@ docker volume rm ${DFSP_ID}_vault-data-${DFSP_ID} ${DFSP_ID}_vault-creds-${DFSP_
         <h3><code>extra_hosts</code></h3>
         <table>
           <tr><th>Nom</th><th>Lab openmfi</th></tr>
-          <tr><td><code>hydra.ext.openmfi.org</code> / <code>mcm.ext.openmfi.org</code></td><td>WAF <code>41.214.65.90</code> (path token <code>/oauth2/token</code>)</td></tr>
-          <tr><td><code>extapi.openmfi.org</code></td><td><code>172.16.2.28</code> (mTLS, pas le WAF DFSP)</td></tr>
+          <tr><td><code>hydra.ext.<HUB_DOMAIN></code> / <code>mcm.ext.<HUB_DOMAIN></code></td><td>WAF <code><WAF_WAN></code> (path token <code>/oauth2/token</code>)</td></tr>
+          <tr><td><code>extapi.<HUB_DOMAIN></code></td><td><code><HUB_EXTAPI></code> (mTLS, pas le WAF DFSP)</td></tr>
         </table>
-        <div class="warn">hydra → <code>172.16.2.26</code> <strong>et</strong> agent qui appelle encore <code>/realms/dfsps/…</code> → 404 Envoy. Corriger <code>tokenPath</code> + wipe Vault, ou hydra via IP LAN WAF.</div>
+        <div class="warn">hydra → <code><HUB_HYDRA></code> <strong>et</strong> agent qui appelle encore <code>/realms/dfsps/…</code> → 404 Envoy. Corriger <code>tokenPath</code> + wipe Vault, ou hydra via IP LAN WAF.</div>
 
         <h3>Outbound CBS (différence overlay)</h3>
 <pre><code># 1:1 — pas de préfixe
@@ -869,7 +892,7 @@ POST http://&lt;SDK_HOST&gt;:11001/&lt;dfspId&gt;/transfers
 
         <h3>DNS</h3>
 <pre><code># ${DFSP_FQDN}                    A  ${WAF_IP}
-# mcm-${DFSP_ID}.ext.openmfi.org  A  ${WAF_IP}
+# mcm-${DFSP_ID}.ext.<HUB_DOMAIN>  A  ${WAF_IP}
 # Vérif depuis le nœud SDK ET depuis le cluster Hub : WAF, pas SDK_HOST
 </code></pre>
 
@@ -878,9 +901,9 @@ POST http://&lt;SDK_HOST&gt;:11001/&lt;dfspId&gt;/transfers
 <pre><code>server {
     listen 443 ssl;
     http2 on;
-    server_name ${DFSP_ID}.ext.openmfi.org;
-    ssl_certificate     /etc/letsencrypt/live/openmfi.org/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/openmfi.org/privkey.pem;
+    server_name ${DFSP_ID}.ext.<HUB_DOMAIN>;
+    ssl_certificate     /etc/letsencrypt/live/<HUB_DOMAIN>/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/<HUB_DOMAIN>/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     location / {
@@ -893,7 +916,7 @@ POST http://&lt;SDK_HOST&gt;:11001/&lt;dfspId&gt;/transfers
         proxy_read_timeout 300s;
     }
 }
-# mcm-${DFSP_ID}.ext.openmfi.org → http://${SDK_HOST}:${PORT_MCM}
+# mcm-${DFSP_ID}.ext.<HUB_DOMAIN> → http://${SDK_HOST}:${PORT_MCM}
 </code></pre>
 <pre><code>sudo nginx -t &amp;&amp; sudo systemctl reload nginx
 curl -skI --resolve ${DFSP_FQDN}:443:${WAF_IP} https://${DFSP_FQDN}/ping
@@ -902,7 +925,7 @@ echo | openssl s_client -servername ${DFSP_FQDN} -connect ${WAF_IP}:443 2&gt;/de
   | openssl x509 -noout -ext subjectAltName
 # SAN = wildcard zone, pas cbs.bftlabs.org
 </code></pre>
-        <p>Ne pas router <code>*.ext.openmfi.org</code> vers OpenCBS.</p>
+        <p>Ne pas router <code>*.ext.<HUB_DOMAIN></code> vers OpenCBS.</p>
 
         <h3>Callbacks MCM</h3>
         <p>Tous les <code>FSPIOP_CALLBACK_URL_*</code> = <code>https://${DFSP_FQDN}</code>.</p>
@@ -920,7 +943,7 @@ curl -sS http://127.0.0.1:3001/mappings | jq .
 </code></pre>
 
         <h3>Tests (ordre)</h3>
-<pre><code># lookup depuis un DFSP déjà onboardé (ex. moov outbound :6001)
+<pre><code># lookup depuis un DFSP déjà onboardé (ex. <fspid> outbound :6001)
 curl -sS "http://${SDK_HOST}:6001/parties/ALIAS/&lt;ALIAS_PAYEE&gt;"
 # fspId = ${DFSP_ID}
 
@@ -1055,7 +1078,7 @@ kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-sdk-internal 4040:4040
 
       <section id="deploiement" class="section">
         <h2>Guide de déploiement overlay</h2>
-        <p>Procédure <strong>générique</strong> (placeholders). Les IPs / tenants du lab openmfi sont en bas, rubrique <em>Contexte actuel</em>. Pour un DFSP neuf en 1:1, commencer par <a href="#mono-deploy">Déploiement Compose</a>.</p>
+        <p>Procédure <strong>générique</strong> (placeholders). Les IPs / tenants du lab (zone <HUB_DOMAIN>) sont en bas, rubrique <em>Contexte actuel</em>. Pour un DFSP neuf en 1:1, commencer par <a href="#mono-deploy">Déploiement Compose</a>.</p>
         <p>Image : <code>sdk-scheme-adapter-multi-dfsp</code> (<code>FROM mojaloop/sdk-scheme-adapter:v24.9.0</code> + overlay). Conteneur et réseau Docker : <code>sdk-fececam</code>. Les agents restent dans leurs stacks.</p>
 
         <h3>1. Fichier <code>lab/.env</code></h3>
@@ -1071,13 +1094,13 @@ kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-sdk-internal 4040:4040
           <tr><td><code>OUTBOUND_API_KEY_ENABLED</code></td><td><code>false</code> = pas de contrôle ; <code>true</code> = header <code>X-API-Key</code> obligatoire</td></tr>
           <tr><td><code>OUTBOUND_API_KEY</code></td><td>Secret (ignoré si ENABLED=false). Si ENABLED=true et vide → 503</td></tr>
           <tr><td><code>MGMT_API_WS_URLS</code></td><td><strong>Généré</strong> par <code>just build</code> dans <code>lab/.env.tenants</code> (ne pas éditer à la main)</td></tr>
-          <tr><td><code>DFSP_HOST_SUFFIX</code></td><td>Lab : figé dans Compose (<code>.ext.openmfi.org</code>)</td></tr>
+          <tr><td><code>DFSP_HOST_SUFFIX</code></td><td>Lab : figé dans Compose (<code>.ext.<HUB_DOMAIN></code>)</td></tr>
           <tr><td><code>DFSP_ID</code> du SDK</td><td>Toujours <code>placeholder</code></td></tr>
         </table>
 
         <h3>2. Une commande : <code>just build</code></h3>
         <p>Inspecte tous les <code>mcm-agent-*</code> <em>running</em>, écrit <code>lab/.env.tenants</code> (<code>MGMT_API_WS_URLS</code>) et <code>lab/compose.tenants.yml</code> (réseaux Docker des stacks agent, en ignorant le réseau overlay <code>sdk-fececam</code>), puis <code>docker compose up --build -d</code>. Un nouvel agent up suffit : relancer <code>just build</code>, sans éditer les noms de réseaux à la main.</p>
-        <div class="warn"><code>just build</code> rattache <strong>tous</strong> les <code>mcm-agent-*</code> running. Un DFSP qui doit rester 1:1 (ex. <code>moov</code> prod) sera aussi branché si <code>mcm-agent-moov</code> tourne. Ne lancer le build que lorsque les agents visés sont ceux de l’overlay, ou arrêter <em>brièvement</em> l’agent à exclure pendant le <code>just build</code> (le SDK dédié se reconnecte au <code>docker start</code> de l’agent).</div>
+        <div class="warn"><code>just build</code> rattache <strong>tous</strong> les <code>mcm-agent-*</code> running. Un DFSP qui doit rester 1:1 (ex. <code><fspid></code> prod) sera aussi branché si <code>mcm-agent-<fspid></code> tourne. Ne lancer le build que lorsque les agents visés sont ceux de l’overlay, ou arrêter <em>brièvement</em> l’agent à exclure pendant le <code>just build</code> (le SDK dédié se reconnecte au <code>docker start</code> de l’agent).</div>
 <pre><code>cd /chemin/sdk-scheme-adapter-multi-tenant
 # ou depuis ~ si ~/.justfile pointe vers ce clone
 just tenants    # aperçu id / réseau, sans builder
@@ -1161,9 +1184,9 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://&lt;DFSP_FQDN&gt;/ping
 </code></pre>
 
         <div class="ctx">
-          <strong>Contexte actuel lab openmfi (exemple, pas un gabarit universel)</strong>
-          <p>Nœud SDK <code>172.25.2.117</code> · WAF <code>41.214.65.90</code> · Hub FSPIOP <code>extapi.openmfi.org</code> → <code>172.16.2.28</code> · suffixe <code>.ext.openmfi.org</code>.</p>
-          <p>Tenants overlay : tout <code>mcm-agent-*</code> running (lab : <code>cmcalavi</code>, <code>gto</code>, <code>moov-test</code>). <code>moov</code> prod (<code>:6000</code>) <strong>hors</strong> overlay.</p>
+          <strong>Contexte actuel lab (zone <HUB_DOMAIN>) (exemple, pas un gabarit universel)</strong>
+          <p>Nœud SDK <code><SDK_HOST></code> · WAF <code><WAF_WAN></code> · Hub FSPIOP <code>extapi.<HUB_DOMAIN></code> → <code><HUB_EXTAPI></code> · suffixe <code>.ext.<HUB_DOMAIN></code>.</p>
+          <p>Tenants overlay : tout <code>mcm-agent-*</code> running (lab : <code><fspid></code>, <code><fspid></code>, <code><fspid></code>). <code><fspid></code> prod (<code>:6000</code>) <strong>hors</strong> overlay.</p>
           <p>Conteneur / réseau <code>sdk-fececam</code> · image <code>sdk-scheme-adapter-multi-dfsp:latest</code> · ports <code>11000</code> / <code>11001</code> / metrics <code>127.0.0.1:11040</code>.</p>
 <pre><code>cp ~/sdk-fececam/sdk-scheme-adapter-multi-tenant/justfile ~/.justfile   # une fois
 just tenants
@@ -1171,7 +1194,7 @@ just build
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
 just logs-overlay
 </code></pre>
-          <p>WAF DFSP overlay : <code>proxy_pass http://172.25.2.117:11000;</code>. UI <code>mcm-moov-test</code> → <code>:10203</code> (pas 11000). Fallback backend Compose : <code>172.16.2.16:8100/mojaloop</code>.</p>
+          <p>WAF DFSP overlay : <code>proxy_pass http://<SDK_HOST>:11000;</code>. UI <code>mcm-<fspid></code> → <code>:10203</code> (pas 11000). Fallback backend Compose : <code><CBS_HOST>:8100/mojaloop</code>.</p>
         </div>
       </section>
 
@@ -1204,15 +1227,15 @@ git clone &lt;repo-toolkit&gt;
         <ul class="check">
           <li>MCM, Hydra (OIDC <code>client_credentials</code>), Keto (droits DFSP), central-ledger, ALS, quoting, transfers.</li>
           <li>Hub CA, Hub JWS, Hub servercerts MCM (sinon Status agent bloqué).</li>
-          <li>Endpoint FSPIOP mTLS (lab : <code>extapi.openmfi.org</code>).</li>
+          <li>Endpoint FSPIOP mTLS (lab : <code>extapi.<HUB_DOMAIN></code>).</li>
           <li>Zone monétaire (lab : <code>XOF</code>).</li>
           <li>Droit admin : créer client Hydra, DFSP MCM, participant ledger, signer CSR.</li>
         </ul>
         <p>Tests Hub (depuis une machine qui joint le WAF) :</p>
-<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.openmfi.org/pm4mlapi/health
+<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.<HUB_DOMAIN>/pm4mlapi/health
 # 200
 
-curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
+curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
   -d 'grant_type=client_credentials' \
   -d 'client_id=&lt;DFSP_ID&gt;' \
   -d 'client_secret=&lt;SECRET&gt;'
@@ -1222,7 +1245,7 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
         <h3>C. DNS + WAF TLS (rien de configuré pour ce DFSP)</h3>
         <ul class="check">
           <li>Zone DNS contrôlée ; records <code>A</code> : <code>&lt;id&gt;.&lt;suffixe&gt;</code> et <code>mcm-&lt;id&gt;.&lt;suffixe&gt;</code> → IP publique du WAF (pas l’IP SDK).</li>
-          <li>Nginx (ou équivalent) : vhost 443 + redirect 80 ; SAN cert = wildcard du suffixe (ex. <code>*.ext.openmfi.org</code>).</li>
+          <li>Nginx (ou équivalent) : vhost 443 + redirect 80 ; SAN cert = wildcard du suffixe (ex. <code>*.ext.<HUB_DOMAIN></code>).</li>
           <li>Firewall : Hub → WAF:443 ; WAF → <code>SDK_HOST:IN</code> ; CBS → <code>SDK_HOST:OUT</code> ; inbound overlay pas ouvert à Internet brut.</li>
         </ul>
 
@@ -1254,8 +1277,8 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
         </ul>
 
         <div class="ctx">
-          <strong>Contexte actuel lab openmfi</strong>
-          WAF <code>41.214.65.90</code> · gw-ext Hydra/MCM <code>172.16.2.26</code> · extapi <code>172.16.2.28</code> · SDK <code>172.25.2.117</code> · OpenCBS exemple <code>172.16.2.16:8100/mojaloop</code>. extra_hosts agent : hydra/mcm → WAF, extapi → <code>.28</code>. Overlay déjà <code>11000</code>/<code>11001</code>.
+          <strong>Contexte actuel lab (zone <HUB_DOMAIN>)</strong>
+          WAF <code><WAF_WAN></code> · gw-ext Hydra/MCM <code><HUB_HYDRA></code> · extapi <code><HUB_EXTAPI></code> · SDK <code><SDK_HOST></code> · OpenCBS exemple <code><CBS_HOST>:8100/mojaloop</code>. extra_hosts agent : hydra/mcm → WAF, extapi → <code>.28</code>. Overlay déjà <code>11000</code>/<code>11001</code>.
         </div>
       </section>
 
@@ -1264,11 +1287,11 @@ curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
         <p>DFSP qui n’a <strong>aucune</strong> stack. On crée l’identité Hub, on démarre <strong>Vault + mcm-agent</strong> (sans SDK dédié si l’overlay est la cible), puis on branche le websocket sur le SDK partagé.</p>
         <p>Remplacer partout <code>&lt;DFSP_ID&gt;</code> (minuscules, ex. <code>acme</code>).</p>
 <pre><code>export DFSP_ID=acme
-export DFSP_FQDN=${DFSP_ID}.ext.openmfi.org
-export SDK_HOST=172.25.2.117          # nœud Docker
-export WAF_IP=41.214.65.90
+export DFSP_FQDN=${DFSP_ID}.ext.<HUB_DOMAIN>
+export SDK_HOST=<SDK_HOST>          # nœud Docker
+export WAF_IP=<WAF_WAN>
 export MCM_UI_PORT=10303              # unique sur l’hôte
-export CBS_BACKEND=172.16.2.16:8100/mojaloop
+export CBS_BACKEND=<CBS_HOST>:8100/mojaloop
 export DEPLOY=~/dfsp-${DFSP_ID}-mojaloop/sdk-scheme-adapter/deploy
 </code></pre>
 
@@ -1279,22 +1302,22 @@ export DEPLOY=~/dfsp-${DFSP_ID}-mojaloop/sdk-scheme-adapter/deploy
           <li>Central-ledger : participant <code>&lt;DFSP_ID&gt;</code> (comptes, NDC).</li>
           <li>Keto : tuples pour que le client gère son DFSP.</li>
         </ol>
-<pre><code>curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
+<pre><code>curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
   -d "grant_type=client_credentials&amp;client_id=${DFSP_ID}&amp;client_secret=${AUTH_CLIENT_SECRET}"
 # access_token attendu
 </code></pre>
 
         <h3>2. DNS</h3>
 <pre><code># records A vers le WAF (pas SDK_HOST)
-#   ${DFSP_ID}.ext.openmfi.org          → ${WAF_IP}
-#   mcm-${DFSP_ID}.ext.openmfi.org      → ${WAF_IP}
+#   ${DFSP_ID}.ext.<HUB_DOMAIN>          → ${WAF_IP}
+#   mcm-${DFSP_ID}.ext.<HUB_DOMAIN>      → ${WAF_IP}
 </code></pre>
 
         <h3>3. Créer l’agent (Vault + mcm-agent)</h3>
-        <p>Template lab : <code>docs/participant/examples/moov-test-docker-compose.yml</code> + <code>manage.sh</code> + <code>scripts/vault-init.sh</code>.</p>
+        <p>Template lab : <code>docs/participant/examples/<fspid>-docker-compose.yml</code> + <code>manage.sh</code> + <code>scripts/vault-init.sh</code>.</p>
 <pre><code>mkdir -p "${DEPLOY}/config/mcm-agent" "${DEPLOY}/scripts"
 # copier compose, manage.sh, vault-init.sh depuis le toolkit
-# remplacer moov-test → ${DFSP_ID}, ports 10203 → ${MCM_UI_PORT}
+# remplacer <fspid> → ${DFSP_ID}, ports 10203 → ${MCM_UI_PORT}
 
 # .env (jamais committer le secret)
 cat &gt; "${DEPLOY}/.env" &lt;&lt;EOF
@@ -1330,12 +1353,12 @@ docker compose rm -f vault-init
 # doit égaler ${DFSP_ID} uniquement
 
 SECRET=$(docker exec mcm-agent-${DFSP_ID} printenv AUTH_CLIENT_SECRET)
-curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
+curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
   -d "grant_type=client_credentials&amp;client_id=${DFSP_ID}&amp;client_secret=${SECRET}"
 </code></pre>
 
         <h3>4. Signer jusqu’à Status MCM 8/8</h3>
-        <p>UI agent : <code>https://mcm-${DFSP_ID}.ext.openmfi.org</code> (après vhost) ou <code>http://${SDK_HOST}:${MCM_UI_PORT}</code>.</p>
+        <p>UI agent : <code>https://mcm-${DFSP_ID}.ext.<HUB_DOMAIN></code> (après vhost) ou <code>http://${SDK_HOST}:${MCM_UI_PORT}</code>.</p>
         <ul class="check">
           <li>Hub Admin MCM : signer CSR inbound / outbound (TLS Client Certificates → Unprocessed).</li>
           <li>Peer JWS / Hub CA déjà hub-wide.</li>
@@ -1370,7 +1393,7 @@ curl -sS -o /tmp/in.json -w "HTTP %{http_code}\n" \
   -H "Accept: application/vnd.interoperability.parties+json;version=1.1" \
   -H "Content-Type: application/vnd.interoperability.parties+json;version=1.1" \
   -H "Date: $(date -u +%a,\ %d\ %b\ %Y\ %H:%M:%S\ GMT)" \
-  -H "FSPIOP-Source: gto" \
+  -H "FSPIOP-Source: <fspid>" \
   -H "FSPIOP-Destination: ${DFSP_ID}" \
   "http://127.0.0.1:11000/parties/MSISDN/22900000000"
 # inbound 202 ; outbound préfixe 200
@@ -1383,11 +1406,11 @@ curl -sS -o /tmp/in.json -w "HTTP %{http_code}\n" \
       <section id="dfsp-existant" class="section">
         <h2>Onboarding DFSP existant (SDK dédié)</h2>
         <p>Cutover : le DFSP a déjà Vault + agent + SDK 1:1. On arrête <strong>uniquement</strong> le SDK dédié, on attache l’agent à l’overlay, on bascule le WAF.</p>
-        <div class="note">Ne pas arrêter l’agent, Vault, Redis du DFSP. Ne pas toucher les autres SDK (ex. ne pas arrêter <code>moov</code> prod pour un cutover <code>moov-test</code>).</div>
+        <div class="note">Ne pas arrêter l’agent, Vault, Redis du DFSP. Ne pas toucher les autres SDK (ex. ne pas arrêter <code><fspid></code> prod pour un cutover <code><fspid></code>).</div>
 
-<pre><code>export DFSP_ID=moov-test          # exemple
-export DFSP_FQDN=${DFSP_ID}.ext.openmfi.org
-export SDK_HOST=172.25.2.117
+<pre><code>export DFSP_ID=&lt;fspid&gt;            # exemple fictif : dfsp-a
+export DFSP_FQDN=${DFSP_ID}.ext.<HUB_DOMAIN>
+export SDK_HOST=<SDK_HOST>
 export OVERLAY=~/sdk-fececam/sdk-scheme-adapter-multi-tenant
 </code></pre>
 
@@ -1404,7 +1427,7 @@ docker inspect mcm-agent-${DFSP_ID} \
         <p>Vérifier le WAF actuel : <code>proxy_pass http://${SDK_HOST}:&lt;PORT_INBOUND_ANCIEN&gt;</code>. L’UI MCM ne change pas de port.</p>
 
         <h3>2. Préparer l’overlay <em>avant</em> le stop</h3>
-        <p>Vérifier que <code>mcm-agent-${DFSP_ID}</code> tourne. <code>just tenants</code> doit déjà le lister. Aucun export de réseau à la main. Contrôler la liste : un agent 1:1 à ne pas overlay (ex. <code>moov</code>) ne doit pas apparaître, sinon l’exclure le temps du build.</p>
+        <p>Vérifier que <code>mcm-agent-${DFSP_ID}</code> tourne. <code>just tenants</code> doit déjà le lister. Aucun export de réseau à la main. Contrôler la liste : un agent 1:1 à ne pas overlay (ex. <code><fspid></code>) ne doit pas apparaître, sinon l’exclure le temps du build.</p>
 
         <h3>3. Déconnecter le SDK dédié</h3>
         <p>Fenêtre d’outage Hub pour <em>ce</em> DFSP jusqu’au reload WAF.</p>
@@ -1430,7 +1453,7 @@ curl -sS -o /tmp/in-${DFSP_ID}.json -w "HTTP %{http_code}\n" \
   -H "Accept: application/vnd.interoperability.parties+json;version=1.1" \
   -H "Content-Type: application/vnd.interoperability.parties+json;version=1.1" \
   -H "Date: $(date -u +%a,\ %d\ %b\ %Y\ %H:%M:%S\ GMT)" \
-  -H "FSPIOP-Source: gto" \
+  -H "FSPIOP-Source: <fspid>" \
   -H "FSPIOP-Destination: ${DFSP_ID}" \
   "http://127.0.0.1:11000/parties/MSISDN/22900000000"
 </code></pre>
@@ -1475,8 +1498,8 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         <p>Ledger Hub : <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh</code></a> — purge (retrait) ou <code>--reset</code> (réinit transferts / positions / ALIAS / MSISDN). MCM / Hydra / Vault restent.</p>
 
         <div class="ctx">
-          <strong>Contexte actuel exemple moov-test</strong>
-          Ancien inbound <code>:10200</code>, outbound <code>:10201</code>, MCM UI <code>:10203</code>. Overlay <code>:11000</code>/<code>:11001</code>. Ne pas toucher <code>sdk-scheme-adapter-moov</code> (<code>:6000</code>) ni CoreDNS moov. Alias ALS <code>0195920986</code> résout <strong>moov</strong> prod, pas moov-test.
+          <strong>Contexte actuel exemple <fspid></strong>
+          Ancien inbound <code>:10200</code>, outbound <code>:10201</code>, MCM UI <code>:10203</code>. Overlay <code>:11000</code>/<code>:11001</code>. Ne pas toucher <code>sdk-scheme-adapter-<fspid></code> (<code>:6000</code>) ni CoreDNS <fspid>. Alias ALS <code>0195920986</code> résout <strong><fspid></strong> prod, pas <fspid>.
         </div>
       </section>
 
@@ -1512,7 +1535,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <span class="badge low">faible</span>
         </div>
         <h2>Risques — transferts d’argent</h2>
-        <p class="lead">Hub <code>ml-test</code>, WAF-AGG, nœud SDK <code>172.25.2.117</code> (<code>sdk-fececam</code> + 8 <code>mcm-agent-*</code>). Un transfert cmcalavi → moov <strong>réussi</strong> le 15 oct. 2026 ne prouve pas que les cinq couches tiennent sous attaque ou sous panne.</p>
+        <p class="lead">Hub <code>ml-test</code>, WAF-AGG, nœud SDK <code><SDK_HOST></code> (<code>sdk-fececam</code> + 8 <code>mcm-agent-*</code>). Un transfert <fspid> → <fspid> <strong>réussi</strong> le 15 oct. 2026 ne prouve pas que les cinq couches tiennent sous attaque ou sous panne.</p>
         <div class="ctx">
           <strong>Cinq couches du modèle Hub</strong>
           mTLS · JWS · ILP · whitelist IP · OAuth MCM. En overlay lab : ILP éteint, outbound sans clé, PUT /parties non validé, mTLS WAF <code>optional</code>, Vault Raft et DFSPs prod sur le même nœud que le POC.
@@ -1539,7 +1562,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         </div>
         <div class="note">
           <strong>Validé le 15 oct. 2026</strong>
-          WAF mTLS avec CA DFSP : <code>ssl-client-verify: SUCCESS</code>. Transfert cmcalavi → moov OK. Overlay 8 tenants. Vault unsealed, leader <code>vault-1</code>. MCM <code>/dfsps/jwscerts</code> 200. Cela n’annule pas E1–E11.
+          WAF mTLS avec CA DFSP : <code>ssl-client-verify: SUCCESS</code>. Transfert <fspid> → <fspid> OK. Overlay 8 tenants. Vault unsealed, leader <code>vault-1</code>. MCM <code>/dfsps/jwscerts</code> 200. Cela n’annule pas E1–E11.
         </div>
         <p>Sources : <code>RISQUES-TRANSFERTS.md</code> (overlay) · <a href="#risques-mono">SDK 1:1</a> · <a href="#risques-infra">infra nested / etcd</a>.</p>
       </section>
@@ -1570,7 +1593,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr>
             <td>E4</td>
             <td>Prod + lab sur un overlay</td>
-            <td>Tenants <code>moov</code>, <code>mtn</code>, <code>clcam-*</code> et lab. Un <code>docker restart sdk-fececam</code> coupe tous les callbacks.</td>
+            <td>Tenants overlay et 1:1 sur le même nœud. Un <code>docker restart sdk-fececam</code> coupe tous les callbacks.</td>
             <td>SDK 1:1 pour la prod jusqu’à qualification ; overlay lab sur nœud séparé ; ACL + API key par tenant.</td>
           </tr>
           <tr>
@@ -1582,7 +1605,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr>
             <td>E6</td>
             <td>Secret Hydra collé dans un chat</td>
-            <td>Session opérateur, <code>mcm-agent</code> moov-test.</td>
+            <td>Session opérateur, <code>mcm-agent</code> <fspid>.</td>
             <td>Rotation <strong>immédiate</strong> du client Hydra. Pas de secret dans Cursor/git.</td>
           </tr>
           <tr>
@@ -1594,14 +1617,14 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr>
             <td>E8</td>
             <td>Peer JWS globale (dernier gagne)</td>
-            <td><code>DfspConfigStore</code> <code>Object.assign(peerJWSKeys)</code>. 8 agents overwrite <code>moov</code>.</td>
+            <td><code>DfspConfigStore</code> <code>Object.assign(peerJWSKeys)</code>. 8 agents overwrite <code><fspid></code>.</td>
             <td>Clés <strong>par tenant</strong> ; fingerprints dans <code>/pm4ml-tenants</code> ; alerte 500 MCM jwscerts.</td>
           </tr>
           <tr>
             <td>E9</td>
             <td>WAF <code>ssl_verify_client optional</code></td>
-            <td>Sans cert → <code>NONE</code> (accepté). Mauvais cert → 400 SSL (Hub→gto avec Hub CA au lieu de <code>gto Root CA</code>).</td>
-            <td>CA = <code>ca.crt</code> Cilium <strong>du DFSP</strong>. <code>on</code> seulement si secret Hub existe. Commenter moov-test/clcam-*. Jamais <code>openmfi-hub-ca.pem</code> sur ces vhosts.</td>
+            <td>Sans cert → <code>NONE</code> (accepté). Mauvais cert → 400 SSL (Hub→<fspid> avec Hub CA au lieu de <code><fspid> Root CA</code>).</td>
+            <td>CA = <code>ca.crt</code> Cilium <strong>du DFSP</strong>. <code>on</code> seulement si secret Hub existe. Commenter les vhosts sans CEC. Jamais <code>hub-ca.pem</code> sur ces vhosts.</td>
           </tr>
           <tr>
             <td>E10</td>
@@ -1612,7 +1635,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr>
             <td>E11</td>
             <td>Path overlay ≠ FSPIOP-Source</td>
-            <td><code>POST /cmcalavi/transfers</code> avec <code>fspiop-source: gto</code>.</td>
+            <td><code>POST /<fspid>/transfers</code> avec <code>fspiop-source: <fspid></code>.</td>
             <td>API key ; backend lié à son <code>dfspId</code> ; overlay : 400 si Source ≠ tenant du path.</td>
           </tr>
         </table>
@@ -1628,12 +1651,12 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         <table>
           <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
           <tr><td>M1</td><td>ALS enregistre <code>http://</code> → 301 nginx (première jambe sans client cert).</td><td>Endpoints ledger/MCM en <code>https://</code>. Pas de redirect 80 sur FSPIOP.</td></tr>
-          <tr><td>M2</td><td>Client cert Hub signé par la CA <strong>DFSP</strong> (<code>CN=gto Root CA</code>), pas Hub CA.</td><td>Runbook WAF : extraire <code>ca.crt</code> par DFSP. Alerte notAfter &lt; 30 j.</td></tr>
-          <tr><td>M3</td><td>Pas de <code>{host}-clientcert-tls</code> pour moov-test / clcam-*.</td><td>Onboard MCM + vault-agent, puis CA WAF, puis mTLS. Checklist nouveau DFSP.</td></tr>
+          <tr><td>M2</td><td>Client cert Hub signé par la CA <strong>DFSP</strong> (<code>CN=<fspid> Root CA</code>), pas Hub CA.</td><td>Runbook WAF : extraire <code>ca.crt</code> par DFSP. Alerte notAfter &lt; 30 j.</td></tr>
+          <tr><td>M3</td><td>Pas de <code>{host}-clientcert-tls</code> pour certains `<fspid>` 1:1.</td><td>Onboard MCM + vault-agent, puis CA WAF, puis mTLS. Checklist nouveau DFSP.</td></tr>
           <tr><td>M4</td><td>Secret K8s à jour ≠ PEM nginx (copie manuelle).</td><td>Compte scp jump Hub → WAF ; pas de copier-coller PEM en prod.</td></tr>
           <tr><td>M5</td><td><code>ssl_verify_client on</code> + mauvaise CA = lookup 400 (argent bloqué).</td><td>Canary <code>optional</code> → <code>on</code> DFSP par DFSP ; probe <code>GET /parties</code>.</td></tr>
           <tr><td>M6</td><td>MCM 500 Vault : agents restent sur cache JWS stale. Stampede 8 restarts → <code>ECONNREFUSED :4004</code>.</td><td>Ordre : Vault leader → MCM 200 → overlay. Pas de restart agents en masse.</td></tr>
-          <tr><td>M7</td><td>Whitelist IP souvent <code>0.0.0.0/0</code> + mTLS optional.</td><td>Allowlist CIDR Hub egress (<code>172.16.2.254</code>) sur vhosts FSPIOP.</td></tr>
+          <tr><td>M7</td><td>Whitelist IP souvent <code>0.0.0.0/0</code> + mTLS optional.</td><td>Allowlist CIDR Hub egress (<code><HUB_EGRESS></code>) sur vhosts FSPIOP.</td></tr>
           <tr><td>M8</td><td>FSPIOP = un facteur (cert). CRL Vault non lue par Envoy.</td><td>Rotation courte ; retirer CA du bundle + secret CEC. Ne pas compter sur la CRL.</td></tr>
           <tr><td>M9</td><td>Agents Compose : <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code>.</td><td><code>1</code> une fois la CA Hub dans le trust store.</td></tr>
           <tr><td>M10</td><td><code>/pm4ml-tenants</code> : mêmes <code>outboundCertBytes</code> sur 8 tenants.</td><td>Fingerprints ; alerte collision.</td></tr>
@@ -1664,7 +1687,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr><th>Symptôme</th><th>Couche</th><th>Action immédiate</th></tr>
           <tr><td>400 HTML <code>SSL certificate error</code> sur <code>*.ext</code></td><td>WAF mTLS</td><td>Commenter <code>ssl_verify_*</code> <strong>ce</strong> vhost ; extraire <code>ca.crt</code> Cilium ; pas Hub CA</td></tr>
           <tr><td><code>certificate has expired</code> vers extapi</td><td>Serveur Hub</td><td><code>openssl s_client</code> ; <code>rollout restart extapi-envoy</code></td></tr>
-          <tr><td><code>invalid signature</code> PUT /quotes</td><td>JWS peer</td><td>MCM jwscerts 200 ? Vault leader ? Fingerprint moov. Pas 8 restarts agents</td></tr>
+          <tr><td><code>invalid signature</code> PUT /quotes</td><td>JWS peer</td><td>MCM jwscerts 200 ? Vault leader ? Fingerprint <fspid>. Pas 8 restarts agents</td></tr>
           <tr><td>504 quote puis 3208 GET transfer</td><td>Conséquence</td><td>Traiter JWS/mTLS ; ignorer 3208</td></tr>
           <tr><td><code>local node not active</code> MCM</td><td>Vault Raft</td><td><code>VAULT_ADDR=http://127.0.0.1:8200 vault status</code> ; ne pas restart SDK</td></tr>
           <tr><td>POST transfer depuis un laptop</td><td>E1</td><td>Couper :11001 WAN ; activer API key</td></tr>
@@ -1674,10 +1697,10 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
         <ol>
           <li><strong>E6</strong> rotation secret Hydra.</li>
           <li><strong>E1</strong> API key outbound + firewall.</li>
-          <li><strong>E4</strong> sortir moov/mtn/clcam prod de l’overlay.</li>
+          <li><strong>E4</strong> sortir les DFSP encore en 1:1 de l’overlay.</li>
           <li><strong>E5</strong> anti-affinity Vault + alerte leader.</li>
           <li><strong>E10</strong> probe extapi notAfter.</li>
-          <li><strong>M2 / M3 / E9</strong> CA par vhost ; <code>on</code> seulement gto/cmcalavi/moov/mtn.</li>
+          <li><strong>M2 / M3 / E9</strong> CA par vhost ; <code>on</code> seulement si le secret CEC existe.</li>
           <li><strong>E8</strong> peer JWS par tenant (code overlay).</li>
           <li><strong>E2 / E3</strong> <code>CHECK_ILP=true</code>, auto-accept <code>false</code>.</li>
           <li><strong>E7</strong> JWS PUT parties.</li>
@@ -1692,7 +1715,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <strong>WAF — extraire les CA DFSP (Hub, pas WAF)</strong>
         </div>
 <pre><code>mkdir -p "$HOME/dfsp-ca"
-for n in gto cmcalavi moov mtn; do
+for n in &lt;fspid&gt;; do   # un secret par DFSP qui a un CEC
   kubectl -n cilium-secrets get secret "${n}-clientcert-tls" \
     -o jsonpath='{.data.ca\.crt}' | base64 -d &gt; "$HOME/dfsp-ca/${n}-ca.pem"
 done
@@ -1708,28 +1731,21 @@ done
         <p class="lead">Stacks Compose encore <strong>up</strong> à côté de l’overlay. Image <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>. Les flags (<code>JWS_SIGN=false</code>, <code>NODE_TLS=0</code>) sont ceux des <em>exemples</em> toolkit — confirmer avec <code>docker inspect</code> (runbook).</p>
         <div class="warn">
           <strong>Double rattachement</strong>
-          <code>just build</code> a branché <strong>tous</strong> les <code>mcm-agent-*</code> sur <code>sdk-fececam</code>. Moov et clcam ont donc un agent qui parle à <strong>deux</strong> SDK, alors que le WAF inbound reste sur les ports 1:1.
+          <code>just build</code> a branché <strong>tous</strong> les <code>mcm-agent-*</code> sur <code>sdk-fececam</code>. Certains DFSP 1:1 ont donc un agent qui parle à <strong>deux</strong> SDK, alors que le WAF inbound reste sur les ports 1:1.
         </div>
         <h3>SDK 1:1 up</h3>
-        <table>
-          <tr><th>Conteneur</th><th>In / out / metrics</th><th>WAF</th><th>Up</th></tr>
-          <tr><td><code>sdk-scheme-adapter-moov</code></td><td>6000 / 6001 / <strong>0.0.0.0:6040</strong></td><td><code>moov.ext</code> → 6000</td><td>~3 sem.</td></tr>
-          <tr><td><code>…-clcam-jardin</code></td><td>8000 / 8001 / 8040</td><td><code>clcam-jardin.ext</code> → 8000</td><td>~2 sem.</td></tr>
-          <tr><td><code>…-clcam-calavi</code></td><td>9000 / 9001 / 9040</td><td><code>clcam-calavi.ext</code> → 9000</td><td>~2 sem.</td></tr>
-          <tr><td><code>…-clcam-calavi-test</code></td><td>10000 / 10001 / 10040</td><td>test → 10000</td><td>~7 j</td></tr>
-          <tr><td><code>…-clcam-jardins-test</code></td><td>10100 / 10101 / 10140</td><td>test → 10100</td><td>~2 sem.</td></tr>
-        </table>
+        <p>Un couple de ports par <code>&lt;fspid&gt;</code>. Exemple fictif : <code>sdk-scheme-adapter-dfsp-a</code> → inbound <code>:6000</code>, outbound <code>:6001</code>, WAF <code>dfsp-a.ext.&lt;HUB_DOMAIN&gt;</code>.</p>
         <p>Chaque stack : <code>mcm-agent-*</code> (healthy, <strong>Up 2 hours</strong> — même restart que l’overlay), Vault 1.20, Redis <strong>bitnami</strong>.</p>
         <h3>Agent sans SDK 1:1 (cutover overlay)</h3>
         <table>
           <tr><th>Agent</th><th>MCM UI</th><th>SDK 1:1</th><th>WAF inbound</th></tr>
-          <tr><td><code>mcm-agent-gto</code></td><td>:5003</td><td>absent</td><td>→ <strong>11000</strong> overlay</td></tr>
-          <tr><td><code>mcm-agent-cmcalavi</code></td><td>:3000</td><td>absent</td><td>→ 11000</td></tr>
-          <tr><td><code>mcm-agent-moov-test</code></td><td>:10203</td><td>absent</td><td>→ 11000</td></tr>
+          <tr><td><code>mcm-agent-<fspid></code></td><td>:5003</td><td>absent</td><td>→ <strong>11000</strong> overlay</td></tr>
+          <tr><td><code>mcm-agent-<fspid></code></td><td>:3000</td><td>absent</td><td>→ 11000</td></tr>
+          <tr><td><code>mcm-agent-<fspid></code></td><td>:10203</td><td>absent</td><td>→ 11000</td></tr>
         </table>
         <div class="ctx">
           <strong>Trous</strong>
-          Pas de <code>sdk-scheme-adapter-mtn</code> alors que le WAF <code>mtn.ext</code> proxy <code>:7000</code>. Overlay metrics = localhost ; 1:1 metrics = toutes interfaces.
+          Pas de <code>sdk-scheme-adapter-<fspid></code> alors que le WAF <code><fspid>.ext</code> proxy <code>:7000</code>. Overlay metrics = localhost ; 1:1 metrics = toutes interfaces.
         </div>
         <p>Failles classées : <a href="#risques-mono-failles">élevé / moyen / faible</a>. Actions : <a href="#risques-mono-ops">runbook</a>.</p>
       </section>
@@ -1739,13 +1755,13 @@ done
         <h3><span class="badge high">Élevé</span></h3>
         <table>
           <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
-          <tr><td>S1</td><td>Agent PM4ML → overlay <strong>et</strong> SDK 1:1. WAF moov/clcam reste 1:1. CBS peut viser :6001 <em>ou</em> :11001/moov.</td><td>Un agent = un WS :4004. Exclure moov/clcam du <code>just build</code> <strong>ou</strong> cutover WAF + stop SDK 1:1. Pas les deux.</td></tr>
+          <tr><td>S1</td><td>Agent PM4ML → overlay <strong>et</strong> SDK 1:1. WAF les `<fspid>` 1:1 reste 1:1. CBS peut viser :6001 <em>ou</em> :11001/<fspid>.</td><td>Un agent = un WS :4004. Exclure les `<fspid>` 1:1 du <code>just build</code> <strong>ou</strong> cutover WAF + stop SDK 1:1. Pas les deux.</td></tr>
           <tr><td>S2</td><td>Outbound <code>0.0.0.0:6001</code>…<code>:10101</code>, pas de clé API (SDK officiel).</td><td>nft allowlist CBS ; bind <code>127.0.0.1</code> si CBS local.</td></tr>
           <tr><td>S3</td><td>Metrics <code>0.0.0.0:6040</code>… (overlay est <code>127.0.0.1:11040</code>).</td><td>Republish <code>127.0.0.1:6040:5040</code> (idem 80xx/90xx/10xxx).</td></tr>
-          <tr><td>S4</td><td>WAF mtn → :7000, <strong>aucun</strong> conteneur.</td><td>Remonter SDK mtn ou changer le vhost. Probe <code>/ping</code> mtn.ext.</td></tr>
+          <tr><td>S4</td><td>WAF <fspid> → :7000, <strong>aucun</strong> conteneur.</td><td>Remonter SDK <fspid> ou changer le vhost. Probe <code>/ping</code> <fspid>.ext.</td></tr>
           <tr><td>S5</td><td>Exemples 1:1 : <code>JWS_SIGN</code> / <code>VALIDATE_INBOUND_JWS</code> = false. PM4ML peut réactiver — pas garanti après 500 Vault.</td><td><code>docker inspect</code> ; forcer true dans env + agent.</td></tr>
           <tr><td>S6</td><td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> agent + SDK (exemples).</td><td><code>1</code> + CA Hub. Overlay est déjà à 1.</td></tr>
-          <tr><td>S7</td><td>Vault/Redis/agent gto, cmcalavi, moov-test sans SDK 1:1. Clés toujours sur disque. CBS ancien port = mort.</td><td>Vérité = overlay. Vérifier les CBS. Backup puis ne pas laisser d’outbound fantôme.</td></tr>
+          <tr><td>S7</td><td>Vault/Redis/agent <fspid>, <fspid>, <fspid> sans SDK 1:1. Clés toujours sur disque. CBS ancien port = mort.</td><td>Vérité = overlay. Vérifier les CBS. Backup puis ne pas laisser d’outbound fantôme.</td></tr>
           <tr><td>S8</td><td>Tous les <code>mcm-agent-*</code> 1:1 « Up 2 hours » vs SDK « Up 3 weeks » — stampede restart.</td><td>Pas de restart 8 agents. Attendre PEER_JWS sans 500 MCM.</td></tr>
         </table>
         <h3><span class="badge med">Moyen</span></h3>
@@ -1753,8 +1769,8 @@ done
           <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
           <tr><td>T1</td><td>Redis <code>bitnami/redis:latest</code>, pas d’AUTH.</td><td><code>redis:7-alpine</code> + mot de passe.</td></tr>
           <tr><td>T2</td><td>8 Vaults file storage / 1 VM, pas de Raft DFSP.</td><td>Backup volumes <code>vault-data-*</code>.</td></tr>
-          <tr><td>T3</td><td>Exemples moov/gto/cmcalavi : inbound mTLS SDK <code>true</code> derrière WAF HTTP.</td><td>Inspect live (moov up 3 sem. ⇒ probablement <code>false</code>). Garder <code>false</code> ; mTLS au WAF.</td></tr>
-          <tr><td>T4</td><td>Vhosts clcam : pas de <code>ssl_verify_client</code> (pas de secret Cilium).</td><td>JWS on + allowlist IP Hub ; plus tard CA + mTLS.</td></tr>
+          <tr><td>T3</td><td>Exemples toolkit : inbound mTLS SDK <code>true</code> derrière WAF HTTP.</td><td>Inspect live. Garder <code>false</code> ; mTLS au WAF.</td></tr>
+          <tr><td>T4</td><td>Vhosts `<fspid>` : pas de <code>ssl_verify_client</code> (pas de secret Cilium).</td><td>JWS on + allowlist IP Hub ; plus tard CA + mTLS.</td></tr>
           <tr><td>T5</td><td>MCM UI <code>0.0.0.0:3000</code>, :5003, :6003, :8003…</td><td>Bind localhost / allow WAF seulement.</td></tr>
           <tr><td>T6</td><td>SDK officiel v24.9.0 vs overlay local — JWS/ILP peuvent différer.</td><td>Retester payer overlay ↔ payee 1:1 après bump.</td></tr>
           <tr><td>T7</td><td>Healthcheck = wget metrics, pas le WS PM4ML.</td><td>Ne pas faire confiance à « healthy » post-restart agent.</td></tr>
@@ -1763,8 +1779,8 @@ done
         <table>
           <tr><th>ID</th><th>Faille</th><th>Remède</th></tr>
           <tr><td>U1</td><td><code>sdk-mt-docs</code> :80 sans auth.</td><td>LAN only.</td></tr>
-          <tr><td>U2</td><td><code>clcam-jardin</code> vs <code>clcam-jardins-test</code>.</td><td>Noms CBS/ALS explicites.</td></tr>
-          <tr><td>U4</td><td>Secret Cilium <code>mtn-clientcert-tls</code> sans data plane local.</td><td>S4 ou offboard Hub.</td></tr>
+          <tr><td>U2</td><td><code><fspid></code> vs <code><fspid></code>.</td><td>Noms CBS/ALS explicites.</td></tr>
+          <tr><td>U4</td><td>Secret Cilium <code><fspid>-clientcert-tls</code> sans data plane local.</td><td>S4 ou offboard Hub.</td></tr>
         </table>
       </section>
 
@@ -1773,24 +1789,24 @@ done
         <h3>Symptôme → action</h3>
         <table>
           <tr><th>Symptôme</th><th>Action</th></tr>
-          <tr><td>502 <code>mtn.ext</code></td><td>Rien sur :7000 — remonter SDK ou changer WAF</td></tr>
-          <tr><td>Timeout inbound <strong>moov</strong></td><td>WAF doit rester :6000 (prod 1:1), pas 11000</td></tr>
-          <tr><td>502 gto/cmcalavi sur ancien port 1:1</td><td>Inbound :11000, outbound CBS <code>:11001/{dfsp}</code></td></tr>
-          <tr><td><code>invalid signature</code> sur moov 1:1</td><td>Inspect JWS ; logs <code>mcm-agent-moov</code> jwscerts</td></tr>
+          <tr><td>502 <code><fspid>.ext</code></td><td>Rien sur :7000 — remonter SDK ou changer WAF</td></tr>
+          <tr><td>Timeout inbound <strong><fspid></strong></td><td>WAF doit rester :6000 (prod 1:1), pas 11000</td></tr>
+          <tr><td>502 sur ancien port 1:1 après cutover</td><td>Inbound :11000, outbound CBS <code>:11001/{dfsp}</code></td></tr>
+          <tr><td><code>invalid signature</code> sur <fspid> 1:1</td><td>Inspect JWS ; logs <code>mcm-agent-<fspid></code> jwscerts</td></tr>
           <tr><td>POST :6001 depuis un laptop</td><td>Firewall S2 immédiat</td></tr>
           <tr><td>Agent healthy, transferts stale</td><td>Un seul consumer WS (S1)</td></tr>
         </table>
         <h3>Ordre</h3>
         <ol>
-          <li><strong>S2 / S3</strong> — fermer outbound + metrics (moov d’abord).</li>
-          <li><strong>S4</strong> — mtn.</li>
-          <li><strong>S1</strong> — un agent, un SDK (sortir moov/clcam de l’overlay <em>ou</em> cutover complet).</li>
+          <li><strong>S2 / S3</strong> — fermer outbound + metrics (<fspid> d’abord).</li>
+          <li><strong>S4</strong> — <fspid>.</li>
+          <li><strong>S1</strong> — un agent, un SDK (sortir les `<fspid>` 1:1 de l’overlay <em>ou</em> cutover complet).</li>
           <li><strong>S5 / S6</strong> — inspect, JWS on, <code>NODE_TLS=1</code>.</li>
           <li><strong>S7</strong> — plus de CBS sur ports morts ; ne pas détruire le Vault dont l’agent overlay a encore besoin.</li>
-          <li><strong>T4</strong> — mTLS WAF clcam quand Cilium aura les secrets.</li>
+          <li><strong>T4</strong> — mTLS WAF sans CEC quand Cilium aura les secrets.</li>
         </ol>
         <h3>Inspect flags live</h3>
-<pre><code>for s in moov clcam-jardin clcam-calavi clcam-calavi-test clcam-jardins-test; do
+<pre><code>for s in &lt;fspid&gt;; do   # répéter pour chaque SDK 1:1 à inspecter
   echo "===== $s ====="
   docker inspect "sdk-scheme-adapter-$s" --format '{{range .Config.Env}}{{println .}}{{end}}' \
     | grep -E '^(JWS_|VALIDATE_|CHECK_ILP|NODE_TLS|INBOUND_MUTUAL|OUTBOUND_MUTUAL|DFSP_ID)='
@@ -1811,7 +1827,7 @@ docker inspect sdk-fececam --format '{{range .Config.Env}}{{println .}}{{end}}' 
         <p class="lead">Les CrashLoopBackOff (cilium-operator, vault, kube-scheduler, handlers Mojaloop) ne viennent <strong>pas</strong> d’un chart K8s. Cause unique : latence disque → etcd rate → VIP control plane retiré → API intermittente. Mesures : 30 juil.–31 août 2026. Même signature le 15 oct. (<code>no route to host</code> :6443).</p>
         <div class="warn">
           <strong>Pas une correction</strong>
-          Le cluster s’est stabilisé après l’arrêt de <code>ml-cc-m-0</code> et <code>cmcalavi-sdk-node</code>. Contournement : le risque revient dès que l’I/O remonte.
+          Le cluster s’est stabilisé après l’arrêt de <code>ml-cc-m-0</code> et <code><SDK_NODE></code>. Contournement : le risque revient dès que l’I/O remonte.
         </div>
         <div class="ctx">
           <strong>Trois facteurs</strong>
@@ -1819,7 +1835,7 @@ docker inspect sdk-fececam --format '{{range .Config.Env}}{{println .}}{{end}}' 
         </div>
 <pre><code>Contention I/O sda (fsync 300–450 ms)
     → etcd : context deadline exceeded
-    → etcd session closed → VIP 172.16.2.25 retiré
+    → etcd session closed → VIP <KUBE_API_VIP> retiré
     → API :6443 « no route to host »
     → CrashLoopBackOff en cascade
 </code></pre>
@@ -1861,7 +1877,7 @@ docker inspect sdk-fececam --format '{{range .Config.Env}}{{println .}}{{end}}' 
         <h3><span class="badge low">Faible</span></h3>
         <table>
           <tr><th>ID</th><th>Constat</th><th>Correction</th></tr>
-          <tr><td>F12</td><td><code>talosctl</code> par défaut vers <code>172.16.2.100</code> (faux no route).</td><td><code>TALOSCONFIG</code> ; <code>talosctl config info</code>.</td></tr>
+          <tr><td>F12</td><td><code>talosctl</code> par défaut vers <code><TALOSCONFIG_STALE></code> (faux no route).</td><td><code>TALOSCONFIG</code> ; <code>talosctl config info</code>.</td></tr>
           <tr><td>F13</td><td>Client 1.13.5 / nœuds 1.13.3.</td><td>Aligner les versions.</td></tr>
           <tr><td>F14</td><td>NTP/DNS Talos commentés dans <code>config.yaml</code>.</td><td><code>talosctl time</code> ; etcd/certs = horloge.</td></tr>
         </table>
@@ -1888,8 +1904,8 @@ fio --rw=write --ioengine=sync --fdatasync=1 \
 </code></pre>
         <h3>Surveillance</h3>
 <pre><code>iostat -x 2
-talosctl -n 172.16.2.114 dmesg -f | grep -i "etcd\|vip"
-talosctl -n 172.16.2.114 service etcd
+talosctl -n <TALOS_CP> dmesg -f | grep -i "etcd\|vip"
+talosctl -n <TALOS_CP> service etcd
 kubectl get pods -A | grep -v Running
 </code></pre>
         <h3>QoS Proxmox (exemple)</h3>
@@ -1905,7 +1921,7 @@ kubectl get pods -A | grep -v Running
         <p>À retirer dès que le stockage est corrigé : des délais longs retardent aussi la détection d’une vraie panne.</p>
         <div class="note">
           <strong>Hors infra</strong>
-          Un <code>PUT /parties/…/error</code> 400 sans <code>errorCode</code> (cmcalavi) est applicatif (ALS / FSPIOP 3102). La PSI I/O du SDK peut jouer, non démontré. Participants ledger OK (200).
+          Un <code>PUT /parties/…/error</code> 400 sans <code>errorCode</code> (<fspid>) est applicatif (ALS / FSPIOP 3102). La PSI I/O du SDK peut jouer, non démontré. Participants ledger OK (200).
         </div>
         <p>Limites : iostat court ; logs etcd natifs non lus ; type disque fournisseur non confirmé. Voir aussi <a href="#hub-net">Hub — réseau</a>.</p>
       </section>
@@ -1915,21 +1931,21 @@ kubectl get pods -A | grep -v Running
         <p><strong>1:1</strong> : inbound <code>&lt;SDK_HOST&gt;:&lt;PORT_IN&gt;</code>, outbound <code>&lt;SDK_HOST&gt;:&lt;PORT_OUT&gt;/transfers</code> (sans préfixe), MCM UI <code>:&lt;PORT_MCM&gt;</code>.</p>
         <p><strong>Overlay</strong> : inbound <code>&lt;SDK_HOST&gt;:&lt;IN&gt;</code>, outbound <code>&lt;SDK_HOST&gt;:&lt;OUT&gt;/{dfspId}/</code>, debug <code>http://127.0.0.1:&lt;IN&gt;/pm4ml-tenants</code>.</p>
         <div class="ctx">
-          <strong>Contexte actuel lab openmfi</strong>
+          <strong>Contexte actuel lab (zone <HUB_DOMAIN>)</strong>
         </div>
         <table>
           <tr><th>Rôle</th><th>Adresse</th></tr>
-          <tr><td>gw-int (*.int)</td><td><code>192.168.0.211</code></td></tr>
-          <tr><td>gw-ext wan (*.ext)</td><td><code>41.214.65.90</code></td></tr>
-          <tr><td>VIP API K8s ml-cc</td><td><code>192.168.0.210</code></td></tr>
-          <tr><td>Documentation publique</td><td><code>https://docs.ext.openmfi.org/documentation</code></td></tr>
-          <tr><td>Documentation VM (LAN)</td><td><code>http://172.25.2.117/documentation</code></td></tr>
-          <tr><td>WAF public</td><td><code>41.214.65.90:443</code></td></tr>
-          <tr><td>Hub FSPIOP</td><td><code>extapi.openmfi.org</code> → <code>172.16.2.28</code></td></tr>
+          <tr><td>gw-int (*.int)</td><td><code><GW_INT_LAN></code></td></tr>
+          <tr><td>gw-ext wan (*.ext)</td><td><code><WAF_WAN></code></td></tr>
+          <tr><td>VIP API K8s ml-cc</td><td><code><CLUSTER_VIP></code></td></tr>
+          <tr><td>Documentation publique</td><td><code>https://docs.ext.<HUB_DOMAIN>/documentation</code></td></tr>
+          <tr><td>Documentation VM (LAN)</td><td><code>http://<SDK_HOST>/documentation</code></td></tr>
+          <tr><td>WAF public</td><td><code><WAF_WAN>:443</code></td></tr>
+          <tr><td>Hub FSPIOP</td><td><code>extapi.<HUB_DOMAIN></code> → <code><HUB_EXTAPI></code></td></tr>
           <tr><td>Conteneur / réseau overlay</td><td><code>sdk-fececam</code></td></tr>
           <tr><td>Image overlay</td><td><code>sdk-scheme-adapter-multi-dfsp:latest</code></td></tr>
-          <tr><td>Overlay inbound</td><td><code>172.25.2.117:11000</code></td></tr>
-          <tr><td>Overlay outbound</td><td><code>172.25.2.117:11001/{dfspId}/</code></td></tr>
+          <tr><td>Overlay inbound</td><td><code><SDK_HOST>:11000</code></td></tr>
+          <tr><td>Overlay outbound</td><td><code><SDK_HOST>:11001/{dfspId}/</code></td></tr>
           <tr><td>Overlay metrics</td><td><code>127.0.0.1:11040</code></td></tr>
           <tr><td>Debug tenants</td><td><code>http://127.0.0.1:11000/pm4ml-tenants</code></td></tr>
         </table>
@@ -1937,21 +1953,21 @@ kubectl get pods -A | grep -v Running
 <pre><code>just build              # overlay (découverte + rebuild)
 just tenants            # mcm-agent-* + réseaux Docker
 just logs-overlay       # logs sdk-fececam
-just logs moov          # SDK 1:1 (alias : just logs calavi → cmcalavi)
-just logs-mcm moov-test # logs mcm-agent-moov-test
+just logs <fspid>        # SDK 1:1
+just logs-mcm <fspid>    # logs mcm-agent-<fspid>
 just ps                 # sdk-scheme-adapter-*
 # overlay ailleurs : OVERLAY_DIR=/chemin just build
 
 # Hub — ledger (docs #hub-purge) : etcd ok, puis dry-run
 export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
 kubectl get --raw=/healthz/etcd
-./scripts/hub/mojaloop-purge-dfsp.sh --reset cmcalavi          # réinit
-./scripts/hub/mojaloop-purge-dfsp.sh cmcalavi                  # purge complète
+./scripts/hub/mojaloop-purge-dfsp.sh --reset &lt;fspid&gt;           # réinit
+./scripts/hub/mojaloop-purge-dfsp.sh &lt;fspid&gt;                   # purge complète
 </code></pre>
         <h3>Publier cette doc sur la VM</h3>
 <pre><code>cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant/docs-web
 docker compose up -d
-# http://172.25.2.117/documentation
+# http://<SDK_HOST>/documentation
 # Si le port 80 est pris :
 # DOC_PORT=8080 docker compose up -d
 </code></pre>

@@ -3,13 +3,13 @@
 [docs](../../docs/index.md) / [Participant](../../docs/participant/index.md) / SDK overlay
 
 **Audiences:** opérateur hub (lab), opérateur DFSP, intégrateur CBS  
-**Statut:** overlay opt-in sur `mojaloop/sdk-scheme-adapter:v24.9.0`. Ce n’est **pas** encore une PR Mojaloop. En lab openmfi, le mode supporté par défaut reste **N stacks Compose** (un SDK par DFSP). Ne basculer un DFSP réel qu’après un créneau de test dédié.
+**Statut:** overlay opt-in sur `mojaloop/sdk-scheme-adapter:v24.9.0`. Ce n’est **pas** encore une PR Mojaloop. En lab (zone <HUB_DOMAIN>), le mode supporté par défaut reste **N stacks Compose** (un SDK par DFSP). Ne basculer un DFSP réel qu’après un créneau de test dédié.
 
 Compléments :
 
 - Tableau comparatif overlay vs `v24.9.0` : [COMPARATIF.md](COMPARATIF.md)
 - Déploiement réel (inventaire, WAF, tests) : [DEPLOY-REAL.md](DEPLOY-REAL.md)
-- Cutover lab `cmcalavi` / `gto` : [lab/cutover-cmcalavi.md](lab/cutover-cmcalavi.md), [lab/cutover-gto.md](lab/cutover-gto.md)
+- Cutover d’un `<fspid>` (runbooks lab) : [lab/cutover-cmcalavi.md](lab/cutover-cmcalavi.md), [lab/cutover-gto.md](lab/cutover-gto.md), [lab/cutover-moov-test.md](lab/cutover-moov-test.md)
 - Onboarding DFSP classique (1 SDK) : [runbook](../../docs/participant/dfsp-onboarding-runbook.md), [Compose lab](../../docs/participant/dfsp-onboarding-compose-lab.md)
 
 Les diagrammes Mermaid ci-dessous se rendent dans GitHub, GitLab, VS Code (extension Markdown Preview Mermaid) et [mermaid.live](https://mermaid.live).
@@ -55,45 +55,45 @@ flowchart LR
 | `mcm-agent` + Vault + client Hydra | — | **oui** |
 | `DFSP_ID`, FQDN, certs JWS / mTLS | — | **oui** |
 | Backend CBS (`BACKEND_ENDPOINT`) | — | **oui** |
-| Vhost WAF `https://<dfsp>.ext.openmfi.org` | — | **oui** (même `proxy_pass`) |
-| UI MCM `mcm-<dfsp>.ext.openmfi.org` | — | **oui** (port hôte distinct) |
+| Vhost WAF `https://<dfsp>.ext.<HUB_DOMAIN>` | — | **oui** (même `proxy_pass`) |
+| UI MCM `mcm-<dfsp>.ext.<HUB_DOMAIN>` | — | **oui** (port hôte distinct) |
 
 Le SDK **n’impose pas** un CBS unique. Chaque `NOTIFY` upsert `backendEndpoint` sous le `dfspId`.
 
 ---
 
-## 3. Topologie lab (openmfi)
+## 3. Topologie lab (zone <HUB_DOMAIN>)
 
-Valeurs de référence du lab actuel (nœud SDK `172.25.2.117`) :
+Placeholders (exemples fictifs RFC 5737 : `<SDK_HOST>`=`192.0.2.117`, `<WAF_WAN>`=`203.0.113.90`, `<HUB_DOMAIN>`=`scheme.example`, `<fspid>`=`dfsp-a`) :
 
 | Rôle | Adresse |
 |------|---------|
-| WAF public | `41.214.65.90:443` |
-| Hub FSPIOP (`extapi`) | `extapi.openmfi.org` → `172.16.2.28` (mTLS) |
-| Overlay inbound | `172.25.2.117:11000` → conteneur `:5000` |
-| Overlay outbound | `172.25.2.117:11001` → conteneur `:5001` |
-| Overlay metrics | `172.25.2.117:11040` → conteneur `:5040` |
+| WAF public | `<WAF_WAN>:443` |
+| Hub FSPIOP (`extapi`) | `extapi.<HUB_DOMAIN>` → `<HUB_EXTAPI>` (mTLS) |
+| Overlay inbound | `<SDK_HOST>:11000` → conteneur `:5000` |
+| Overlay outbound | `<SDK_HOST>:11001` → conteneur `:5001` |
+| Overlay metrics | `<SDK_HOST>:11040` → conteneur `:5040` |
 
-Le Hub **n’atteint pas** `172.25.2.117`. Les callbacks FSPIOP sont toujours `https://<DFSP_FQDN>` via le WAF.
+Le Hub **n’atteint pas** `<SDK_HOST>`. Les callbacks FSPIOP sont toujours `https://<DFSP_FQDN>` via le WAF.
 
 ```mermaid
 flowchart TB
-  Hub["Hub ALS / quoting / transfers<br/>extapi.openmfi.org"]
-  WAF["WAF 41.214.65.90:443<br/>server_name = dfsp.ext.openmfi.org"]
+  Hub["Hub ALS / quoting / transfers<br/>extapi.<HUB_DOMAIN>"]
+  WAF["WAF <WAF_WAN>:443<br/>server_name = dfsp.ext.<HUB_DOMAIN>"]
   SDK["SDK overlay<br/>inbound :5000 / outbound :5001"]
   Redis["Redis"]
-  AgentA["mcm-agent-cmcalavi:4004<br/>Vault A + Hydra cmcalavi"]
-  AgentB["mcm-agent-gto:4004<br/>Vault B + Hydra gto"]
-  CBS["OpenCBS 172.16.2.16:8100/mojaloop"]
+  AgentA["mcm-agent-<fspid>:4004<br/>Vault A + Hydra <fspid>"]
+  AgentB["mcm-agent-<fspid>:4004<br/>Vault B + Hydra <fspid>"]
+  CBS["OpenCBS <CBS_HOST>:8100/mojaloop"]
   Tester["CBS / curl / testers"]
 
-  Hub -->|"GET/POST https://dfsp.ext.openmfi.org"| WAF
-  WAF -->|"proxy_pass http://172.25.2.117:11000"| SDK
+  Hub -->|"GET/POST https://dfsp.ext.<HUB_DOMAIN>"| WAF
+  WAF -->|"proxy_pass http://<SDK_HOST>:11000"| SDK
   SDK --- Redis
   SDK -->|"WS ControlAgent"| AgentA
   SDK -->|"WS ControlAgent"| AgentB
   SDK -->|"GET/POST tenant backend"| CBS
-  Tester -->|"POST http://172.25.2.117:11001/gto/transfers"| SDK
+  Tester -->|"POST http://<SDK_HOST>:11001/<fspid>/transfers"| SDK
   SDK -->|"mTLS PUT/GET/POST"| Hub
 ```
 
@@ -164,12 +164,12 @@ Règles :
 
 1. `FSPIOP-Destination` s’il est déjà dans le store ;
 2. premier segment de path s’il est un tenant (peu utilisé en inbound) ;
-3. `Host` moins `DFSP_HOST_SUFFIX` (ex. `gto.ext.openmfi.org` → `gto`) ;
+3. `Host` moins `DFSP_HOST_SUFFIX` (ex. `<fspid>.ext.<HUB_DOMAIN>` → `<fspid>`) ;
 4. `FSPIOP-Destination` tel quel ;
 5. premier label du Host s’il est dans le store ;
 6. si **un seul** tenant chargé, celui-là.
 
-**Outbound CBS** — préfixe obligatoire `/{dfspId}/…`. Middleware `stripPm4mlOutboundPrefix` : `POST /gto/transfers` devient `POST /transfers` avec `pm4mlDfspId=gto`. Sans préfixe, le SDK ne sait pas quel cert / backend utiliser.
+**Outbound CBS** — préfixe obligatoire `/{dfspId}/…`. Middleware `stripPm4mlOutboundPrefix` : `POST /<fspid>/transfers` devient `POST /transfers` avec `pm4mlDfspId=<fspid>`. Sans préfixe, le SDK ne sait pas quel cert / backend utiliser.
 
 ```mermaid
 flowchart TD
@@ -201,11 +201,11 @@ Réponse type :
 
 ```json
 {
-  "tenants": ["cmcalavi", "gto"],
+  "tenants": ["<fspid>", "<fspid>"],
   "tls": [
     {
-      "dfspId": "cmcalavi",
-      "backendEndpoint": "172.16.2.16:8100/mojaloop",
+      "dfspId": "<fspid>",
+      "backendEndpoint": "<CBS_HOST>:8100/mojaloop",
       "outboundCertBytes": 2060,
       "outboundKeyBytes": 3284,
       "certHead": "-----BEGIN CERTIFICATE-----"
@@ -220,20 +220,20 @@ Attendre que les deux agents aient NOTIFY (quelques secondes après le start). `
 
 ## 5. Flux FSPIOP (transfert outbound)
 
-Exemple lab : **gto** paie **cmcalavi**, alias payee `D865307F4F383`.
+Exemple lab : **<fspid>** paie **<fspid>**, alias payee `D865307F4F383`.
 
 ```mermaid
 sequenceDiagram
-  participant CBS as Tester / CBS gto
+  participant CBS as Tester / CBS <fspid>
   participant Out as SDK outbound :5001
-  participant Hub as extapi.openmfi.org
+  participant Hub as extapi.<HUB_DOMAIN>
   participant In as SDK inbound :5000
-  participant Payee as OpenCBS cmcalavi
+  participant Payee as OpenCBS <fspid>
 
-  CBS->>Out: POST /gto/transfers
-  Note over Out: tenant gto — certs + backend gto
+  CBS->>Out: POST /<fspid>/transfers
+  Note over Out: tenant <fspid> — certs + backend <fspid>
   Out->>Hub: GET /parties/ALIAS/…
-  Hub->>In: GET Host: cmcalavi.ext.openmfi.org
+  Hub->>In: GET Host: <fspid>.ext.<HUB_DOMAIN>
   In->>Payee: GET /mojaloop/parties/…
   Payee-->>In: JSON party
   In->>Hub: PUT /parties/… (partyIdType, partyIdentifier, fspId)
@@ -281,12 +281,12 @@ Wrap overlay lookup : si le CBS omet `idType` / `idValue`, les handlers rempliss
 |----------|------------|--------|
 | `PM4ML_ENABLED` | `true` | Active ControlAgent |
 | `PM4ML_MULTI_TENANT` | `true` | Sinon comportement officiel (1 agent, `restart()`) |
-| `DFSP_HOST_SUFFIX` | `.ext.openmfi.org` | Découpe le Host inbound |
-| `MGMT_API_WS_URLS` | `cmcalavi@mcm-agent-cmcalavi:4004,gto@mcm-agent-gto:4004` | Noms = `container_name` Docker |
+| `DFSP_HOST_SUFFIX` | `.ext.<HUB_DOMAIN>` | Découpe le Host inbound |
+| `MGMT_API_WS_URLS` | `<fspid>@mcm-agent-<fspid>:4004,<fspid>@mcm-agent-<fspid>:4004` | Noms = `container_name` Docker |
 | `DFSP_ID` | `placeholder` | Ne pas laisser un vrai ID (serait upserté globalement) |
 | `CACHE_URL` | `redis://redis:6379` | Redis **du** compose overlay |
-| `PEER_ENDPOINT` / ALS / quotes / transfers | `extapi.openmfi.org` | Hub |
-| `BACKEND_ENDPOINT` | fallback `172.16.2.16:8100/mojaloop` | Écrasé par NOTIFY agent |
+| `PEER_ENDPOINT` / ALS / quotes / transfers | `extapi.<HUB_DOMAIN>` | Hub |
+| `BACKEND_ENDPOINT` | fallback `<CBS_HOST>:8100/mojaloop` | Écrasé par NOTIFY agent |
 | `INBOUND_LISTEN_PORT` | `5000` | |
 | `OUTBOUND_LISTEN_PORT` | `5001` | |
 | `INBOUND_MUTUAL_TLS_ENABLED` | `false` | TLS terminé au WAF (`ssl_verify_client`). Ne pas passer le SDK en HTTPS derrière `proxy_pass http://` |
@@ -294,9 +294,9 @@ Wrap overlay lookup : si le CBS omet `idType` / `idValue`, les handlers rempliss
 | `JWS_SIGN` / `VALIDATE_INBOUND_JWS` | `true` | Clé / peer keys PM4ML par tenant. PUT /parties : flags séparés, défaut `false` |
 | `ENABLE_*_EVENT_HANDLER` | `false` | Pas de Kafka dans ce POC |
 | `NODE_TLS_REJECT_UNAUTHORIZED` | `1` | CA Hub dans `outbound.tls.creds.ca` (NOTIFY). `0` = trou lab |
-| `extra_hosts` | `extapi.openmfi.org:172.16.2.28` | Évite le WAF pour le client mTLS |
+| `extra_hosts` | `extapi.<HUB_DOMAIN>:<HUB_EXTAPI>` | Évite le WAF pour le client mTLS |
 
-`MULTI_DFSP` (préfixe de chemin **backend**) est un autre flag officiel. En multi-tenant PM4ML, le routeur inbound le désactive (`multiDfsp: false`) pour ne pas exiger `/cmcalavi/parties` côté Hub.
+`MULTI_DFSP` (préfixe de chemin **backend**) est un autre flag officiel. En multi-tenant PM4ML, le routeur inbound le désactive (`multiDfsp: false`) pour ne pas exiger `/<fspid>/parties` côté Hub.
 
 ### 6.2 Variables par agent (inchangées)
 
@@ -305,7 +305,7 @@ Dans le `.env` de **chaque** stack agent :
 - `DFSP_ID`, `DFSP_FQDN`
 - `AUTH_CLIENT_ID` / secret Hydra
 - `BACKEND_ENDPOINT` (`host:port/mojaloop`, sans schéma)
-- `extra_hosts` : `hydra` / `mcm` → WAF, `extapi` → `172.16.2.28`
+- `extra_hosts` : `hydra` / `mcm` → WAF, `extapi` → `<HUB_EXTAPI>`
 
 Le NOTIFY agent **écrase** le fallback Compose du SDK. Changer le backend ⇒ recréer **l’agent** (pas seulement le SDK).
 
@@ -326,9 +326,9 @@ Le SDK doit être sur le réseau Docker de **chaque** agent (sinon le WS `mcm-ag
 ```bash
 cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant   # clone réel
 
-export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
+export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-<fspid> \
   -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
-export GTO_DOCKER_NET=$(docker inspect mcm-agent-gto \
+export GTO_DOCKER_NET=$(docker inspect mcm-agent-<fspid> \
   -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -1)
 export IN=11000 OUT=11001 MET=11040
 ```
@@ -348,8 +348,8 @@ docker stop sdk-scheme-adapter-<dfspId>
 docker compose -f lab/docker-compose.yml up --build -d
 sleep 15
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
-docker exec sdk-fececam getent hosts mcm-agent-gto
-docker exec sdk-fececam getent hosts mcm-agent-cmcalavi
+docker exec sdk-fececam getent hosts mcm-agent-<fspid>
+docker exec sdk-fececam getent hosts mcm-agent-<fspid>
 ```
 
 Attendu : `"tenants"` contient tous les IDs listés dans `MGMT_API_WS_URLS`.
@@ -362,10 +362,10 @@ Pour **chaque** FQDN DFSP overlay :
 server {
     listen 443 ssl;
     http2 on;
-    server_name <DFSP_ID>.ext.openmfi.org;
-    # … certs zone openmfi.org …
+    server_name <DFSP_ID>.ext.<HUB_DOMAIN>;
+    # … certs zone <HUB_DOMAIN> …
     location / {
-        proxy_pass http://172.25.2.117:11000;
+        proxy_pass http://<SDK_HOST>:11000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header FSPIOP-Destination $http_fspiop_destination;
@@ -375,11 +375,11 @@ server {
 }
 ```
 
-`mcm-<id>.ext.openmfi.org` reste sur le **port MCM de cet agent** (pas `:11000`).
+`mcm-<id>.ext.<HUB_DOMAIN>` reste sur le **port MCM de cet agent** (pas `:11000`).
 
 ```bash
 nginx -t && systemctl reload nginx
-curl -sS -o /dev/null -w "%{http_code}\n" https://<DFSP_ID>.ext.openmfi.org/ping
+curl -sS -o /dev/null -w "%{http_code}\n" https://<DFSP_ID>.ext.<HUB_DOMAIN>/ping
 # 405 = vhost OK (pas de GET /ping FSPIOP)
 ```
 
@@ -393,15 +393,15 @@ Tous les `FSPIOP_CALLBACK_URL_*` = origine `https://<DFSP_FQDN>` (pas d’IP, pa
 
 | Action | URL |
 |--------|-----|
-| Transfert en tant que gto | `POST http://127.0.0.1:11001/gto/transfers` |
-| Lookup en tant que cmcalavi | `GET http://127.0.0.1:11001/cmcalavi/parties/…` |
+| Transfert en tant que <fspid> | `POST http://127.0.0.1:11001/<fspid>/transfers` |
+| Lookup en tant que <fspid> | `GET http://127.0.0.1:11001/<fspid>/parties/…` |
 
-Le CBS de chaque caisse doit viser `http://172.25.2.117:11001/<dfspId>/…` une fois le DFSP sur l’overlay.
+Le CBS de chaque caisse doit viser `http://<SDK_HOST>:11001/<dfspId>/…` une fois le DFSP sur l’overlay.
 
 ### 7.7 Tests minimaux
 
 1. `GET /pm4ml-tenants` : tous les IDs, `backendEndpoint` avec `/mojaloop`, `outboundCertBytes` > 0.
-2. Inbound : `Host: <dfsp>.ext.openmfi.org` + `FSPIOP-Destination` → **202** sur `GET /parties`.
+2. Inbound : `Host: <dfsp>.ext.<HUB_DOMAIN>` + `FSPIOP-Destination` → **202** sur `GET /parties`.
 3. Outbound : `POST /<payer>/transfers` → lookup + quote (logs `quoteRequest is done`).
 4. Fulfil : `COMPLETED` seulement si le **payee CBS** accepte `POST /mojaloop/transfers` (voir §9).
 5. Logs : pas de `http://http://`, pas de `restart()` inbound à chaque NOTIFY.
@@ -427,10 +427,10 @@ Deux cas : (A) DFSP **déjà** onboardé en stack 1:1 — cutover overlay ; (B) 
 - [ ] Client Hydra `client_credentials` + secret.
 - [ ] Enregistrement MCM, zone devise (lab : `XOF`).
 - [ ] Participant **central-ledger** (comptes, NDC) — sinon prepare Hub timeout / erreur ledger.
-- [ ] Endpoint Hub FSPIOP : `extapi.openmfi.org` + CA Hub pour mTLS.
-- [ ] Droit de créer DNS `A` : `<DFSP_ID>.ext.openmfi.org` et `mcm-<DFSP_ID>.ext.openmfi.org` → WAF (`41.214.65.90`), **pas** l’IP SDK.
+- [ ] Endpoint Hub FSPIOP : `extapi.<HUB_DOMAIN>` + CA Hub pour mTLS.
+- [ ] Droit de créer DNS `A` : `<DFSP_ID>.ext.<HUB_DOMAIN>` et `mcm-<DFSP_ID>.ext.<HUB_DOMAIN>` → WAF (`<WAF_WAN>`), **pas** l’IP SDK.
 - [ ] Accès WAF nginx (vhost 443 + redirect 80).
-- [ ] Certificat TLS WAF dont le SAN couvre `*.ext.openmfi.org` (pas un SAN `cbs.…` étranger).
+- [ ] Certificat TLS WAF dont le SAN couvre `*.ext.<HUB_DOMAIN>` (pas un SAN `cbs.…` étranger).
 
 #### DFSP / CBS
 
@@ -438,20 +438,20 @@ Deux cas : (A) DFSP **déjà** onboardé en stack 1:1 — cutover overlay ; (B) 
 - [ ] Parties lookup : `GET /mojaloop/parties/{idType}/{idValue}` → JSON (pas HTML SPA).
 - [ ] Quotes : `POST /mojaloop/quoterequests`.
 - [ ] Transfers : `POST /mojaloop/transfers`.
-- [ ] Table **`cbs.counterparties`** (ou équivalent) : contrepartie pour **chaque** FSP payer qui créditera cette caisse. Sans ligne pour `gto` sur le tenant cmcalavi → `51045`, rien n’est écrit, le SDK outbound fait 504 fulfil.
+- [ ] Table **`cbs.counterparties`** (ou équivalent) : contrepartie pour **chaque** FSP payer qui créditera cette caisse. Sans ligne pour `<fspid>` sur le tenant <fspid> → `51045`, rien n’est écrit, le SDK outbound fait 504 fulfil.
 - [ ] Si le CBS initie des paiements : il appellera `http://<SDK_HOST>:<OUT>/<DFSP_ID>/transfers` (préfixe obligatoire).
 - [ ] Alias / MSISDN de test mappés dans le CBS **et** connus du Hub ALS si lookup croisé.
 
 #### Nœud SDK / Docker
 
-- [ ] Nœud overlay (lab : `172.25.2.117`), Docker daemon up.
+- [ ] Nœud overlay (lab : `<SDK_HOST>`), Docker daemon up.
 - [ ] Clone overlay + image buildable (`mojaloop/sdk-scheme-adapter:v24.9.0` pullable).
 - [ ] Ports hôtes libres pour **cet** agent MCM (UI). Inbound/outbound overlay **déjà** `11000`/`11001` — on ne crée **pas** un nouveau couple inbound Hub.
 - [ ] Stack **agent seul** : Vault + `mcm-agent` + `default.json` (`tokenPath` `/oauth2/token`). **Pas** de `sdk-scheme-adapter` dans ce Compose.
 - [ ] Port agent `4004` exposé **uniquement** sur le réseau Docker (`expose`, pas `ports:` public).
 - [ ] `container_name` stable : `mcm-agent-<DFSP_ID>` (doit matcher `MGMT_API_WS_URLS`).
 - [ ] CSR signés jusqu’à Status MCM **8/8** (certs inbound/outbound dans Vault).
-- [ ] `extra_hosts` agent : Hydra/MCM → WAF, `extapi` → `172.16.2.28`.
+- [ ] `extra_hosts` agent : Hydra/MCM → WAF, `extapi` → `<HUB_EXTAPI>`.
 
 #### Overlay déjà en place
 
@@ -459,7 +459,7 @@ Deux cas : (A) DFSP **déjà** onboardé en stack 1:1 — cutover overlay ; (B) 
 - [ ] Variable `MGMT_API_WS_URLS` : concaténer `<id>@mcm-agent-<id>:4004`.
 - [ ] Recréer le SDK (`up --build`) après modification des WS / networks.
 
-Ne pas changer le CoreDNS / extra_hosts **moov** (ni les autres DFSPs hors overlay) pour un onboarding overlay.
+Ne pas changer le CoreDNS / extra_hosts **<fspid>** (ni les autres DFSPs hors overlay) pour un onboarding overlay.
 
 ### 8.2 Procédure — nouveau DFSP (B)
 
@@ -490,7 +490,7 @@ flowchart TD
 5. **CBS** — comptes, aliases, **counterparties** pour les FSP avec lesquels on échangera (au minimum le payer du premier test).
 6. **Overlay** — `docker inspect mcm-agent-<id>` pour le nom de réseau ; l’ajouter dans `lab/docker-compose.yml` (`external: true`) + `MGMT_API_WS_URLS`.
 7. **Rebuild SDK** — `docker compose -f lab/docker-compose.yml up --build -d`.
-8. **WAF** — vhost DFSP → `http://172.25.2.117:11000` ; vhost `mcm-` → port UI agent.
+8. **WAF** — vhost DFSP → `http://<SDK_HOST>:11000` ; vhost `mcm-` → port UI agent.
 9. **MCM** — callbacks `https://<DFSP_FQDN>`.
 10. **Vérif** — `/pm4ml-tenants` contient `<DFSP_ID>` ; inbound 202 ; outbound préfixé.
 
@@ -531,7 +531,7 @@ Ne pas coller les dumps axios complets : le logger Axios peut y mettre les PEM m
 - Overlay **communautaire / lab**, pas le défaut production.
 - Un Redis et un process SDK = point unique de défaillance pour N DFSPs.
 - Store tenants **en mémoire** : perdu au restart jusqu’au prochain NOTIFY (quelques secondes).
-- Ne pas fusionner moov/mtn/clcam-\* sur cet overlay tant que le cutover n’est pas validé DFSP par DFSP.
+- Ne pas fusionner d’autres `<fspid>` 1:1 sur cet overlay tant que le cutover n’est pas validé DFSP par DFSP.
 - `MULTI_DFSP` (préfixe backend) ≠ `PM4ML_MULTI_TENANT` (préfixe outbound + Host inbound).
 - Contribution Mojaloop éventuelle : flag off par défaut, tests d’intégration à deux agents mock.
 - Ledger switch : [`scripts/hub/mojaloop-purge-dfsp.sh`](../../scripts/hub/mojaloop-purge-dfsp.sh) — [guide](../../docs/adopter/mojaloop-purge-dfsp.md). Purge (retrait du participant) ou `--reset` (transferts, positions à 0, ALIAS, MSISDN ; le DFSP reste). Dry-run par défaut ; MCM / Hydra / Vault hors périmètre. Vérifier `kubectl get --raw=/healthz/etcd` avant `--execute`.

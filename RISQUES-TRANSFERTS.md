@@ -1,9 +1,9 @@
 # Registre des risques — transferts d’argent (openmfi / overlay SDK)
 
 **Date :** 15 octobre 2026  
-**Périmètre :** Hub `ml-test`, WAF-AGG, nœud SDK `172.25.2.117` (`sdk-fececam` + 8 `mcm-agent-*`), DFSPs overlay **et** DFSPs déjà en production sur le même nœud (`moov`, `mtn`, `clcam-*`).  
-**Contexte :** transfert cmcalavi → moov **réussi** après correction mTLS WAF. Ce document sert de préparation opérationnelle (incident, audit, « toute éventualité »).  
-**Méthode :** faits observés (14–15 oct. 2026) + configuration réelle (`lab/docker-compose.yml`, WAF `openmfi.org`, Vault Raft, Cilium/Envoy).
+**Périmètre :** Hub `ml-test`, WAF-AGG, nœud SDK `<SDK_HOST>` (`sdk-fececam` + 8 `mcm-agent-*`), DFSPs overlay **et** DFSPs déjà en production sur le même nœud (les `<fspid>` du nœud).  
+**Contexte :** transfert <fspid> → <fspid> **réussi** après correction mTLS WAF. Ce document sert de préparation opérationnelle (incident, audit, « toute éventualité »).  
+**Méthode :** faits observés (14–15 oct. 2026) + configuration réelle (`lab/docker-compose.yml`, WAF `<HUB_DOMAIN>`, Vault Raft, Cilium/Envoy).
 
 Les niveaux :
 
@@ -26,7 +26,7 @@ Le chemin argent repose sur **cinq couches** (mTLS, JWS, ILP, whitelist IP, OAut
 ### E1 — API outbound SDK sans authentification (`:11001`)
 
 **Où :** `lab/.env` / compose — `OUTBOUND_API_KEY_ENABLED=false`. Ports hôte `11000`/`11001` bind **0.0.0.0**.  
-**Risque :** quiconque joint `172.25.2.117:11001` peut `POST /{dfspId}/transfers` (payer cmcalavi, moov, gto…). C’est l’API qui **initie** le mouvement d’argent.  
+**Risque :** quiconque joint `<SDK_HOST>:11001` peut `POST /{dfspId}/transfers` (payer <fspid>, <fspid>, <fspid>…). C’est l’API qui **initie** le mouvement d’argent.  
 **Preuve :** les POST lab (curl, python-httpx) sans `X-API-Key`.  
 **Remède :**
 
@@ -38,7 +38,7 @@ Le chemin argent repose sur **cinq couches** (mTLS, JWS, ILP, whitelist IP, OAut
 
 **Où :** `lab/docker-compose.yml` (`CHECK_ILP: "false"`).  
 **Risque :** le SDK n’exige pas la preuve ILP du fulfil. Un fulfil malformé ou rejoué peut être accepté côté adapter. Couche 5 du modèle Hub **éteinte** sur l’overlay.  
-**Remède :** `CHECK_ILP=true` dès que les backends (quoting.openmfi.org / mojaloop) émettent un ILP condition valide. Tester un transfert, puis un fulfil altéré (doit échouer).
+**Remède :** `CHECK_ILP=true` dès que les backends (quoting.<HUB_DOMAIN> / mojaloop) émettent un ILP condition valide. Tester un transfert, puis un fulfil altéré (doit échouer).
 
 ### E3 — `AUTO_ACCEPT_PARTY` / `AUTO_ACCEPT_QUOTES` à `true`
 
@@ -48,9 +48,9 @@ Le chemin argent repose sur **cinq couches** (mTLS, JWS, ILP, whitelist IP, OAut
 
 ### E4 — DFSPs production et lab sur **un seul** `sdk-fececam`
 
-**Où :** tenants : `moov`, `mtn`, `clcam-*` **et** `moov-test`, `gto`, `cmcalavi`.  
+**Où :** tenants : les `<fspid>` du nœud **et** `<fspid>`, `<fspid>`, `<fspid>`.  
 **Risque :** restart overlay, bug JWS global, `CHECK_ILP=false`, ou POST mal ciblé = **argent réel**. Un `docker restart sdk-fececam` a déjà coupé **tous** les callbacks.  
-**Remède :** overlay lab sur compose/nœud **séparé** ; `moov`/`mtn`/`clcam` prod restent en SDK **mono-tenant** jusqu’à qualification. Au minimum : ACL réseau + API key **par** tenant.
+**Remède :** overlay lab sur compose/nœud **séparé** ; `<fspid>`/`<fspid>`/``<fspid>`` prod restent en SDK **mono-tenant** jusqu’à qualification. Au minimum : ACL réseau + API key **par** tenant.
 
 ### E5 — Vault Raft : 3 réplicas sur **un** worker, 200+ restarts
 
@@ -66,9 +66,9 @@ Le chemin argent repose sur **cinq couches** (mTLS, JWS, ILP, whitelist IP, OAut
 
 ### E6 — Secret Hydra / `AUTH_CLIENT_SECRET` collé dans le chat
 
-**Où :** session opérateur (config `mcm-agent` moov-test).  
+**Où :** session opérateur (config `mcm-agent` <fspid>).  
 **Risque :** client OAuth DFSP réutilisable contre Hydra/MCM (enrollment, certs).  
-**Remède :** rotation **immédiate** du client Hydra `moov-test` (et tout secret collé). Révoquer l’ancien. Ne plus coller de secrets dans Cursor/chat ; vault/env uniquement.
+**Remède :** rotation **immédiate** du client Hydra `<fspid>` (et tout secret collé). Révoquer l’ancien. Ne plus coller de secrets dans Cursor/chat ; vault/env uniquement.
 
 ### E7 — JWS inbound : `PUT /parties` non validé
 
@@ -79,19 +79,19 @@ Le chemin argent repose sur **cinq couches** (mTLS, JWS, ILP, whitelist IP, OAut
 ### E8 — Map JWS peer **globale** (dernier agent gagne)
 
 **Où :** `DfspConfigStore` — `Object.assign(this.peerJWSKeys, slice.peerJWSKeys)`.  
-**Risque :** 8 agents poussent `peerJWSKeys['moov']` ; le **dernier** overwrite. Une PEM stale (moov-test, clcam) invalide la vérif **pour tout le nœud**. Transferts quotes → 400 JWS → timeout 504.  
+**Risque :** 8 agents poussent `peerJWSKeys['<fspid>']` ; le **dernier** overwrite. Une PEM stale (<fspid>, `<fspid>`) invalide la vérif **pour tout le nœud**. Transferts quotes → 400 JWS → timeout 504.  
 **Remède :** clés peer **par tenant** (pas de merge global) ; ou n’accepter un overwrite que si empreinte SHA-256 identique à MCM. Exposer `/pm4ml-tenants` : liste `dfspId` + fingerprint. Alerte si 500 MCM `jwscerts`.
 
 ### E9 — mTLS WAF `ssl_verify_client optional`
 
-**Où :** vhosts FSPIOP gto/cmcalavi/moov/mtn.  
+**Où :** vhosts FSPIOP <fspid>/<fspid>/<fspid>/<fspid>.  
 **Risque :**
 
 - **Pas de cert** → `NONE` → requête **acceptée** (callback Hub sans mTLS, ou client quelconque).
-- **Mauvais cert** → **400 SSL** (vu : Hub→gto avec Hub CA au lieu de `gto Root CA`).
+- **Mauvais cert** → **400 SSL** (vu : Hub→<fspid> avec Hub CA au lieu de `<fspid> Root CA`).
 
 `optional` n’est pas « permissif gentil » : il refuse les certs invalides **et** laisse passer l’absence de cert.  
-**Remède :** après inventory des `{host}-clientcert-tls`, passer à `ssl_verify_client on` **par vhost qui a une CA**. Laisser commenté **uniquement** les FQDN sans secret Hub (`moov-test`, `clcam-*` tant que pas de CEC). Ne **jamais** mettre `openmfi-hub-ca.pem` sur ces vhosts (issuer = CA **DFSP**, pas Hub CA).
+**Remède :** après inventory des `{host}-clientcert-tls`, passer à `ssl_verify_client on` **par vhost qui a une CA**. Laisser commenté **uniquement** les FQDN sans secret Hub (`<fspid>`, `<fspid>` (1:1) tant que pas de CEC). Ne **jamais** mettre `hub-ca.pem` sur ces vhosts (issuer = CA **DFSP**, pas Hub CA).
 
 ### E10 — Cert `extapi` 30 jours + Envoy qui sert un secret périmé
 
@@ -101,7 +101,7 @@ Le chemin argent repose sur **cinq couches** (mTLS, JWS, ILP, whitelist IP, OAut
 
 ### E11 — Initiation de transfert depuis n’importe quel process du nœud
 
-**Preuve :** `POST /cmcalavi/transfers` avec `fspiop-source: gto` (client python) alors que le tenant path est cmcalavi.  
+**Preuve :** `POST /<fspid>/transfers` avec `fspiop-source: <fspid>` (client python) alors que le tenant path est <fspid>.  
 **Risque :** confusion payer / tenant overlay ; scripts lab qui débittent le **mauvais** DFSP.  
 **Remède :** API key + le backend n’accepte que son `dfspId` ; overlay : refuser si `FSPIOP-Source` ≠ tenant du path.
 
@@ -111,19 +111,19 @@ Le chemin argent repose sur **cinq couches** (mTLS, JWS, ILP, whitelist IP, OAut
 
 ### M1 — Callbacks Hub en `http://` (ALS) → 301 nginx
 
-**Preuve :** `PUT …/error` 301 puis 200 ; URLs ALS `http://gto.ext.openmfi.org`.  
+**Preuve :** `PUT …/error` 301 puis 200 ; URLs ALS `http://<fspid>.ext.<HUB_DOMAIN>`.  
 **Risque :** première jambe **sans** client cert ; retry HTTPS. Course, perte de mTLS, timeouts.  
 **Remède :** enregistrer les endpoints DFSP en `https://` dans le ledger / MCM onboarding. Désactiver le redirect 80 sur les vhosts FSPIOP (ou ne répondre qu’en 444).
 
 ### M2 — Cert client Hub signé par la **CA DFSP**, pas Hub CA
 
-**Preuve :** `gto-clientcert-tls` issuer `CN=gto Root CA`, validité ~5 mois.  
+**Preuve :** `<fspid>-clientcert-tls` issuer `CN=<fspid> Root CA`, validité ~5 mois.  
 **Risque :** opérateur qui configure le WAF avec Hub CA → 400 (incident 14 oct.). Rotation CA DFSP casse Hub→DFSP.  
 **Remède :** runbook WAF = extraire `ca.crt` du secret Cilium **par DFSP**. Documenter le modèle (enrollment outbound). Alerte notAfter &lt; 30 j sur ces secrets.
 
-### M3 — Pas de `{host}-clientcert-tls` pour moov-test / clcam-*
+### M3 — Pas de `{host}-clientcert-tls` pour certains `<fspid>` 1:1
 
-**Preuve :** `kubectl -n cilium-secrets` : seulement gto, cmcalavi, moov, mtn.  
+**Preuve :** `kubectl -n cilium-secrets` : seulement <fspid>, <fspid>, <fspid>, <fspid>.  
 **Risque :** Hub n’envoie pas de cert → `NONE`. Quand l’enrollment arrivera, oubli WAF = 400 lookups.  
 **Remède :** onboard MCM + vault-agent ; extraire CA ; activer mTLS vhost **après**. Checklist par nouveau DFSP.
 
@@ -146,7 +146,7 @@ Agents restent `PEER_JWS_CONFIGURED` sur **cache Vault local** (clés possibleme
 
 Le modèle prévoit un filtre IP Envoy ; en lab souvent `0.0.0.0/0` (whitelist Vault `whitelist_*`).  
 **Risque :** mTLS `optional` + IP any = FSPIOP inbound depuis Internet si le WAF est public.  
-**Remède :** CIDR Hub egress (`172.16.2.254` / WAN Hub) **uniquement** sur vhosts FSPIOP `allow`. Mesurer avant de passer `ssl_verify_client on`.
+**Remède :** CIDR Hub egress (`<HUB_EGRESS>` / WAN Hub) **uniquement** sur vhosts FSPIOP `allow`. Mesurer avant de passer `ssl_verify_client on`.
 
 ### M8 — OAuth FSPIOP absent (un facteur : cert)
 
@@ -168,7 +168,7 @@ Exemples toolkit : `"0"` sur mcm-agent. Overlay SDK : `"1"`.
 
 ### M11 — API Kubernetes / réseau intermittent
 
-**Preuve :** `kubectl` `no route to host` 172.16.2.25:6443 alors que ping OK ; quelques minutes plus tard 6443 OK.  
+**Preuve :** `kubectl` `no route to host` <KUBE_API_VIP>:6443 alors que ping OK ; quelques minutes plus tard 6443 OK.  
 **Risque :** pas de rollback cert, pas d’ops Hub pendant l’incident argent.  
 **Remède :** kubeconfig depuis **deux** jumps ; VIP API ; alerte `nc -z :6443`.
 
@@ -179,7 +179,7 @@ Exemples toolkit : `"0"` sur mcm-agent. Overlay SDK : `"1"`.
 
 ### M13 — Logs nginx `combined` sans `Host`
 
-Diagnostic mTLS (gto vs moov-test) aveugle. `error_log` niveau error : pas de `client SSL certificate verify` (info).  
+Diagnostic mTLS (<fspid> vs <fspid>) aveugle. `error_log` niveau error : pas de `client SSL certificate verify` (info).  
 **Remède :** `log_format` avec `$host $ssl_client_verify $ssl_client_s_dn` ; `error_log … info` sur vhosts FSPIOP.
 
 ---
@@ -222,7 +222,7 @@ Moins d’audit métier dans le SDK.
 |----------|--------|------------------|
 | 400 HTML `SSL certificate error` sur `*.ext` | WAF mTLS (mauvaise CA ou cert Hub mort) | Commenter `ssl_verify_*` **ce** vhost ; extraire `ca.crt` Cilium ; ne pas toucher Hub CA |
 | `certificate has expired` vers extapi | Cert serveur Hub | `openssl s_client` ; `rollout restart extapi-envoy` |
-| `invalid signature` PUT /quotes | JWS peer | MCM `jwscerts` 200 ? Vault leader ? Fingerprint `moov` ; **ne pas** restart 8 agents d’un coup |
+| `invalid signature` PUT /quotes | JWS peer | MCM `jwscerts` 200 ? Vault leader ? Fingerprint `<fspid>` ; **ne pas** restart 8 agents d’un coup |
 | 504 quote puis 3208 GET transfer | Conséquence (quote jamais accepté) | Traiter la cause (JWS/mTLS), ignorer 3208 |
 | `local node not active` MCM | Vault Raft | `vault status` HTTP ; ne pas restart SDK |
 | POST transfer depuis un laptop | E1 | Couper `:11001` WAN ; activer API key |
@@ -234,10 +234,10 @@ Moins d’audit métier dans le SDK.
 
 1. **E6** rotation secret Hydra collé.  
 2. **E1** API key outbound + bind localhost/firewall.  
-3. **E4** sortir `moov`/`mtn`/clcam **prod** de l’overlay (ou nœud dédié).  
+3. **E4** sortir `<fspid>`/`<fspid>`/`<fspid>` encore en 1:1 de l’overlay (ou nœud dédié).  
 4. **E5** anti-affinity Vault + alerte leader.  
 5. **E10** probe extapi notAfter + restart Envoy au renew.  
-6. **M2/M3/E9** CA par vhost ; `optional` → `on` uniquement gto/cmcalavi/moov/mtn ; clcam/moov-test commentés.  
+6. **M2/M3/E9** CA par vhost ; `optional` → `on` uniquement <fspid>/<fspid>/<fspid>/<fspid> ; `<fspid>` sans CEC commentés.  
 7. **E8** peer JWS par tenant (code overlay).  
 8. **E2/E3** `CHECK_ILP=true`, auto-accept `false` avec backend réel.  
 9. **E7** JWS PUT parties.  
@@ -248,8 +248,8 @@ Moins d’audit métier dans le SDK.
 
 ## Ce qui a été **validé** le 15 oct. 2026
 
-- WAF mTLS avec **CA DFSP** : `ssl-client-verify: SUCCESS`, `CN=cmcalavi.ext.openmfi.org`.  
-- Lookup payee + quote + transfert cmcalavi → moov **OK** après ça.  
+- WAF mTLS avec **CA DFSP** : `ssl-client-verify: SUCCESS`, `CN=<fspid>.ext.<HUB_DOMAIN>`.  
+- Lookup payee + quote + transfert <fspid> → <fspid> **OK** après ça.  
 - Overlay 8 tenants reconnectés aux `mcm-agent-*` healthy.  
 - Vault unsealed, HA standby `vault-0`, leader `vault-1`.  
 - MCM `GET /api/dfsps/jwscerts` 200.

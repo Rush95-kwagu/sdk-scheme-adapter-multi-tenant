@@ -1,10 +1,10 @@
-# Cutover cmcalavi → overlay (sdk-node)
+# Cutover <fspid> → overlay (sdk-node)
 
-Ne pas arrêter `mcm-agent-cmcalavi`, `sdk-vault-cmcalavi`, `sdk-redis-cmcalavi`.
-Ne pas toucher moov / gto / mtn / clcam-*.
+Ne pas arrêter `mcm-agent-<fspid>`, `sdk-vault-<fspid>`, `sdk-redis-<fspid>`.
+Ne pas toucher les autres DFSPs 1:1 du même nœud.
 
-WAF actuel : `cmcalavi.ext.openmfi.org` → `172.25.2.117:4000`.
-MCM UI : `mcm-cmcalavi.ext.openmfi.org` → `:3000` (inchangé).
+WAF actuel : `<fspid>.ext.<HUB_DOMAIN>` → `<SDK_HOST>:4000`.
+MCM UI : `mcm-<fspid>.ext.<HUB_DOMAIN>` → `:3000` (inchangé).
 
 Deux SDK ne doivent **pas** ouvrir le websocket PM4ML du même agent.
 
@@ -25,12 +25,12 @@ git pull
 ## 1. Réseau Docker de l’agent
 
 ```bash
-export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-cmcalavi \
+export CMCALAVI_DOCKER_NET=$(docker inspect mcm-agent-<fspid> \
   -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')
 echo "$CMCALAVI_DOCKER_NET"
 ```
 
-Doit afficher un nom (souvent `dfsp-cmcalavi_mojaloop` ou `…_default`).
+Doit afficher un nom (souvent `dfsp-<fspid>_mojaloop` ou `…_default`).
 
 ---
 
@@ -41,11 +41,11 @@ export IN=11000 OUT=11001 MET=11040
 cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant
 docker compose -f poc/docker-compose.yml down
 
-docker update --restart=no sdk-scheme-adapter-cmcalavi
-docker stop sdk-scheme-adapter-cmcalavi
+docker update --restart=no sdk-scheme-adapter-<fspid>
+docker stop sdk-scheme-adapter-<fspid>
 ```
 
-Outage Hub cmcalavi jusqu’à l’étape 4 (WAF encore sur `:4000`).
+Outage Hub <fspid> jusqu’à l’étape 4 (WAF encore sur `:4000`).
 
 ---
 
@@ -55,28 +55,28 @@ Outage Hub cmcalavi jusqu’à l’étape 4 (WAF encore sur `:4000`).
 docker compose -f lab/docker-compose.yml up --build -d
 sleep 8
 curl -sS http://127.0.0.1:11000/pm4ml-tenants
-docker logs --tail 80 sdk-fececam 2>&1 | grep -E 'cmcalavi|NOTIFY|tenant|error' || true
+docker logs --tail 80 sdk-fececam 2>&1 | grep -E '<fspid>|NOTIFY|tenant|error' || true
 ```
 
-Attendu : `{"tenants":["cmcalavi"]}`. Si `[]` : l’agent n’a pas fourni `dfspId` (corrigé par `cmcalavi@mcm-agent-…` après rebuild) ; ou le SDK n’est pas sur le réseau de l’agent :
+Attendu : `{"tenants":["<fspid>"]}`. Si `[]` : l’agent n’a pas fourni `dfspId` (corrigé par `<fspid>@mcm-agent-…` après rebuild) ; ou le SDK n’est pas sur le réseau de l’agent :
 
 ```bash
 docker inspect sdk-fececam -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
-docker exec sdk-fececam getent hosts mcm-agent-cmcalavi
+docker exec sdk-fececam getent hosts mcm-agent-<fspid>
 docker logs sdk-fececam 2>&1 | grep -E 'upsert|placeholder|waiting for mcm|CONFIGURATION|tenant'
-docker restart mcm-agent-cmcalavi
+docker restart mcm-agent-<fspid>
 ```
 
 Inbound (bypass WAF) :
 
 ```bash
 curl -sS -o /tmp/in.json -w "HTTP %{http_code}\n" \
-  -H "Host: cmcalavi.ext.openmfi.org" \
+  -H "Host: <fspid>.ext.<HUB_DOMAIN>" \
   -H "Accept: application/vnd.interoperability.parties+json;version=1.1" \
   -H "Content-Type: application/vnd.interoperability.parties+json;version=1.1" \
   -H "Date: $(date -u +%a,\ %d\ %b\ %Y\ %H:%M:%S\ GMT)" \
-  -H "FSPIOP-Source: moov" \
-  -H "FSPIOP-Destination: cmcalavi" \
+  -H "FSPIOP-Source: <fspid>" \
+  -H "FSPIOP-Destination: <fspid>" \
   "http://127.0.0.1:11000/parties/MSISDN/22900000000"
 ```
 
@@ -85,33 +85,33 @@ curl -sS -o /tmp/in.json -w "HTTP %{http_code}\n" \
 Outbound :
 
 ```text
-http://172.25.2.117:11001/cmcalavi/
-http://172.25.2.117:11001/cmcalavi/parties/MSISDN/<alias>
+http://<SDK_HOST>:11001/<fspid>/
+http://<SDK_HOST>:11001/<fspid>/parties/MSISDN/<alias>
 ```
 
-Un seul tenant : `http://172.25.2.117:11001/` (sans préfixe) reprend **cmcalavi**. Dès un 2ᵉ DFSP, le préfixe `/cmcalavi/` est obligatoire.
+Un seul tenant : `http://<SDK_HOST>:11001/` (sans préfixe) reprend **<fspid>**. Dès un 2ᵉ DFSP, le préfixe `/<fspid>/` est obligatoire.
 
 ---
 
 ## 4. Couper le WAF (Hub)
 
-Sur le WAF, vhost `cmcalavi.ext.openmfi.org` :
+Sur le WAF, vhost `<fspid>.ext.<HUB_DOMAIN>` :
 
 ```nginx
-proxy_pass http://172.25.2.117:11000;
+proxy_pass http://<SDK_HOST>:11000;
 ```
 
 `nginx -t && systemctl reload nginx`.
 
-MCM callbacks restent `https://cmcalavi.ext.openmfi.org` (pas d’IP, pas `http://`).
+MCM callbacks restent `https://<fspid>.ext.<HUB_DOMAIN>` (pas d’IP, pas `http://`).
 
-CBS : pointer vers `http://172.25.2.117:11001` (ou `…/cmcalavi` si plusieurs tenants).
+CBS : pointer vers `http://<SDK_HOST>:11001` (ou `…/<fspid>` si plusieurs tenants).
 
 ---
 
 ## 5. Tests Hub
 
-Lookup Moov (`:6001`) d’un alias ALS → `cmcalavi`, puis `POST /transfers` Moov → cmcalavi → `COMPLETED`.
+Lookup <fspid> (`:6001`) d’un alias ALS → `<fspid>`, puis `POST /transfers` <fspid> → <fspid> → `COMPLETED`.
 
 ---
 
@@ -120,7 +120,7 @@ Lookup Moov (`:6001`) d’un alias ALS → `cmcalavi`, puis `POST /transfers` Mo
 ```bash
 cd ~/sdk-fececam/sdk-scheme-adapter-multi-tenant
 docker compose -f lab/docker-compose.yml down
-# WAF : proxy_pass http://172.25.2.117:4000
-docker update --restart=unless-stopped sdk-scheme-adapter-cmcalavi
-docker start sdk-scheme-adapter-cmcalavi
+# WAF : proxy_pass http://<SDK_HOST>:4000
+docker update --restart=unless-stopped sdk-scheme-adapter-<fspid>
+docker start sdk-scheme-adapter-<fspid>
 ```
