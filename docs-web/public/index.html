@@ -38,6 +38,7 @@
           <a class="item" href="#hub-deploy">Déploiement Flux</a>
           <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
           <a class="item" href="#hub-purge">Purge / réinit DFSP</a>
+          <a class="item" href="#hub-purge-alias">Purge alias ALS</a>
         </details>
         <details class="nav-group" open>
           <summary>SDK 1:1</summary>
@@ -118,7 +119,7 @@
         <div class="cards three">
           <div class="card">
             <h3>Hub Mojaloop</h3>
-            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Ledger : <a href="#hub-purge">purge ou <code>--reset</code></a>.</p>
+            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Ledger : <a href="#hub-purge">purge ou <code>--reset</code></a> · alias : <a href="#hub-purge-alias">purge ALIAS</a>.</p>
           </div>
           <div class="card">
             <h3>SDK 1:1 (défaut toolkit)</h3>
@@ -529,7 +530,7 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
         </div>
         <h3>Hors script</h3>
         <ul class="check">
-          <li>Après <code>--reset</code> : reprovisionner les alias ALS / oracle (comme un onboarding). Comptes et endpoints Hub déjà là.</li>
+          <li>Après <code>--reset</code> : reprovisionner les alias ALS / oracle (comme un onboarding). Comptes et endpoints Hub déjà là. Pour retirer des alias <strong>sans</strong> toucher le ledger : <a href="#hub-purge-alias">purge alias</a>.</li>
           <li>Après purge : client Hydra, MCM, CA / certs Vault — l’enrolment reste tant qu’on ne le retire pas à la main.</li>
           <li>Stack SDK 1:1 (<code>manage.sh down</code>) ou détachement overlay (<code>docker stop mcm-agent-…</code> puis <code>just build</code>) — seulement si le DFSP quitte le nœud.</li>
           <li>WAF / DNS du FQDN : inchangés en <code>--reset</code> ; à retirer seulement après une purge complète.</li>
@@ -538,6 +539,81 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
         <div class="ctx">
           <strong>Contexte actuel — lab</strong>
           Cluster switch (ex. <code>ml-test</code>), VIP API <code>&lt;KUBE_API_VIP&gt;</code> (exemple fictif <code>192.0.2.25</code>). Lancer le script depuis une machine qui a <code>kubectl</code> vers ce cluster (hôte Proxmox / bastion), pas depuis le seul nœud SDK.
+        </div>
+      </section>
+
+      <section id="hub-purge-alias" class="section">
+        <div class="badges">
+          <span class="badge">oracle_alias</span>
+          <span class="badge">dry-run par défaut</span>
+          <span class="badge">ALS</span>
+        </div>
+        <h2>Hub — purge d’alias ALS</h2>
+        <p class="lead">Script <code>scripts/hub/mojaloop-purge-alias.sh</code> : supprime des enregistrements dans <code>oracle_alias.mappings</code> (et optionnellement les <code>participants</code> orphelins). <strong>Ne touche pas</strong> au ledger, MCM, Hydra ni Vault — complémentaire de la <a href="#hub-purge">purge DFSP</a>.</p>
+        <div class="warn">
+          <strong>Dry-run d’abord</strong>
+          Sans <code>--execute</code>, les <code>DELETE</code> passent dans une transaction puis <code>ROLLBACK</code>. Confirmation interactive : taper <code>SUPPRIMER</code> (ou <code>-y</code>).
+        </div>
+        <h3>Périmètre</h3>
+        <table>
+          <tr><th>Store</th><th>Effet</th></tr>
+          <tr><td><code>oracle_alias.mappings</code></td><td>Lignes matchées par valeur d’alias et/ou <code>fspId</code></td></tr>
+          <tr><td><code>oracle_alias.participants</code></td><td>Seulement avec <code>--clean-participants</code> (fsp sans plus aucun mapping)</td></tr>
+          <tr><td><code>central_ledger</code> / MCM / Hydra / Vault</td><td><strong>Inchangés</strong></td></tr>
+        </table>
+        <p>Colonne valeur détectée automatiquement : <code>alias</code>, <code>aliasId</code>, <code>partyId</code>, <code>idValue</code> ou <code>value</code>. Cible lab : PXC <code>data/mojaloop-db-pxc-0</code>, secret <code>data/mojaloop-db-secrets</code> clé <code>root</code>.</p>
+        <h3>Prérequis</h3>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
+chmod +x scripts/hub/mojaloop-purge-alias.sh
+kubectl get --raw=/healthz/etcd   # attendu : ok
+</code></pre>
+        <h3>Lister avant de supprimer</h3>
+<pre><code># Tous les alias d’un DFSP
+./scripts/hub/mojaloop-purge-alias.sh --list --fsp &lt;fspid&gt;
+
+# Un ou plusieurs alias (dry-run = affichage + ROLLBACK)
+./scripts/hub/mojaloop-purge-alias.sh ALIAS1 ALIAS2 ALIAS3
+./scripts/hub/mojaloop-purge-alias.sh 'ALIAS1,ALIAS2,ALIAS3,ALIAS4,ALIAS5'
+</code></pre>
+        <h3>Commandes</h3>
+<pre><code># Dry-run (défaut) — un alias
+./scripts/hub/mojaloop-purge-alias.sh &lt;alias&gt;
+
+# Plusieurs alias (espaces ou virgules entre quotes)
+./scripts/hub/mojaloop-purge-alias.sh ALIAS1 ALIAS2 ALIAS3
+./scripts/hub/mojaloop-purge-alias.sh 'ALIAS1,ALIAS2,ALIAS3'
+
+# Tous les alias d’un DFSP
+./scripts/hub/mojaloop-purge-alias.sh --fsp &lt;fspid&gt;
+
+# Fichier (un alias par ligne, # = commentaire)
+./scripts/hub/mojaloop-purge-alias.sh -f /tmp/aliases.txt
+
+# Appliquer
+./scripts/hub/mojaloop-purge-alias.sh --execute -y ALIAS1 ALIAS2
+./scripts/hub/mojaloop-purge-alias.sh --execute -y --fsp &lt;fspid&gt; --clean-participants
+
+# SQL de relecture
+./scripts/hub/mojaloop-purge-alias.sh --sql-out /tmp/alias-dry.sql ALIAS1 ALIAS2
+</code></pre>
+        <table>
+          <tr><th>Option</th><th>Effet</th></tr>
+          <tr><td><code>--list</code></td><td>Affiche les lignes matchées, pas de DELETE</td></tr>
+          <tr><td><code>--fsp DFSP</code></td><td>Filtre / cible tous les alias de ce <code>fspId</code> (répétable)</td></tr>
+          <tr><td><code>-f</code> / <code>--alias-file</code></td><td>Liste depuis un fichier</td></tr>
+          <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>
+          <tr><td><code>--execute</code></td><td>COMMIT réel</td></tr>
+          <tr><td><code>-y</code></td><td>Pas de prompt <code>SUPPRIMER</code></td></tr>
+          <tr><td><code>--clean-participants</code></td><td>Supprime les <code>participants</code> devenus orphelins</td></tr>
+          <tr><td><code>--sql-out FICHIER</code></td><td>Écrit le SQL généré</td></tr>
+        </table>
+        <div class="note">
+          <strong>Intersection</strong>
+          Si tu combines <code>--fsp</code> et des valeurs d’alias, seules les lignes qui matchent <strong>les deux</strong> sont touchées (<code>AND</code>).
+        </div>
+        <div class="ctx">
+          <strong>Quand utiliser quoi</strong>
+          Alias de test / wrong FSP → <code>mojaloop-purge-alias.sh</code>. Recyclage ledger complet (transferts + MSISDN + tous les ALIAS du DFSP) → <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh --reset</code></a>. Retrait du participant → purge DFSP sans <code>--reset</code>.
         </div>
       </section>
 

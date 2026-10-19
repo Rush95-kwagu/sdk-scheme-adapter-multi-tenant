@@ -1,6 +1,15 @@
 # Overlay SDK + vrais mcm-agents (pas poc/).
 # Réseaux tenants : générés (just build → lab/compose.tenants.yml).
 #
+# Tenant lab visé ici : fspid ledger = moovtest
+#   Agent 1:1 (hors ce fichier) : mcm-agent-moovtest
+#   Ancien stack hyphen : mcm-agent-moov-test / ports 10200/10201/10203
+#   Le container_name de l’agent DOIT être mcm-agent-moovtest (suffixe = fspid),
+#   sinon just build ancre WS « moov-test@… » et le Host inbound ne matche pas.
+#   Vault + Redis + mcm-agent restent dans ~/dfsp-moov-test (ne pas les coller ici).
+#   Après cutover WAF : moovtest.ext.openmfi.org → :11000 (plus :10200).
+#   UI MCM : :10203 inchangé.
+#
 #   just build
 #   # ou : bash lab/discover-tenants.sh && docker compose -f lab/docker-compose.yml \
 #   #          -f lab/compose.tenants.yml --env-file lab/.env --env-file lab/.env.tenants up --build -d
@@ -29,6 +38,8 @@ services:
       - "${OUT:-11001}:5001"
       - "127.0.0.1:${MET:-11040}:5040"
     extra_hosts:
+      - "hydra.ext.openmfi.org:41.214.65.90"
+      - "mcm.ext.openmfi.org:41.214.65.90"
       - "extapi.openmfi.org:172.16.2.28"
     environment:
       LOG_LEVEL: info
