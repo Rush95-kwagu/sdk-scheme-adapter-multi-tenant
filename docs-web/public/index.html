@@ -37,7 +37,7 @@
           <a class="item" href="#hub-env">Environnements</a>
           <a class="item" href="#hub-deploy">Déploiement Flux</a>
           <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
-          <a class="item" href="#hub-purge">Purge / réinit DFSP</a>
+          <a class="item" href="#hub-purge">Purge / réinit / période</a>
           <a class="item" href="#hub-purge-alias">Purge alias ALS</a>
         </details>
         <details class="nav-group" open>
@@ -119,7 +119,7 @@
         <div class="cards three">
           <div class="card">
             <h3>Hub Mojaloop</h3>
-            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Ledger : <a href="#hub-purge">purge ou <code>--reset</code></a> · alias : <a href="#hub-purge-alias">purge ALIAS</a>.</p>
+            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Ledger : <a href="#hub-purge">purge, <code>--reset</code> ou période</a> · alias : <a href="#hub-purge-alias">purge ALIAS</a>.</p>
           </div>
           <div class="card">
             <h3>SDK 1:1 (défaut toolkit)</h3>
@@ -449,28 +449,37 @@ securityContext:
           <span class="badge high">irréversible</span>
           <span class="badge">dry-run par défaut</span>
           <span class="badge">--reset</span>
+          <span class="badge">--since / --until</span>
         </div>
-        <h2>Hub — purge ou réinit d’un DFSP</h2>
-        <p class="lead">Script <code>scripts/hub/mojaloop-purge-dfsp.sh</code> : deux modes — <strong>purge</strong> (retrait du participant) ou <code>--reset</code> (réinit comme un onboarding neuf). Ni SDK, ni MCM / Hydra / Vault. Markdown : <code>docs/adopter/mojaloop-purge-dfsp.md</code>.</p>
+        <h2>Hub — purge, réinit ou période</h2>
+        <p class="lead">Script <code>scripts/hub/mojaloop-purge-dfsp.sh</code> : <strong>purge</strong> (retrait du participant), <code>--reset</code> (réinit ledger complète), ou <code>--reset --since/--until</code> (fenêtre temporelle). Ni SDK, ni MCM / Hydra / Vault. Markdown : <code>docs/adopter/mojaloop-purge-dfsp.md</code>.</p>
         <div class="warn">
           <strong>Dry-run d’abord</strong>
           Sans <code>--execute</code>, tout passe dans une transaction MySQL puis <code>ROLLBACK</code>. Le Hub (<code>participantId</code> 1) est protégé. Confirmation : <code>SUPPRIMER</code> (purge) ou <code>REINITIALISER</code> (<code>--reset</code>).
         </div>
-        <h3>Purge vs <code>--reset</code></h3>
+        <h3>Purge vs <code>--reset</code> vs période</h3>
         <table>
-          <tr><th></th><th>Purge (défaut)</th><th><code>--reset</code> (réinit)</th></tr>
-          <tr><td>Participant, comptes, limites, endpoints, tokens</td><td>supprimés</td><td><strong>conservés</strong></td></tr>
-          <tr><td>Transferts / quotes / settlements</td><td>supprimés</td><td>supprimés</td></tr>
-          <tr><td>Positions</td><td>lignes supprimées</td><td><code>value</code> et <code>reservedValue</code> à <strong>0</strong></td></tr>
-          <tr><td>Oracle MSISDN / ALIAS</td><td>supprimés</td><td>supprimés (recréer comme un onboarding)</td></tr>
-          <tr><td>MCM / Hydra / Vault</td><td>inchangés</td><td>inchangés</td></tr>
-          <tr><td>Confirmation <code>--execute</code></td><td><code>SUPPRIMER</code></td><td><code>REINITIALISER</code></td></tr>
+          <tr><th></th><th>Purge (défaut)</th><th><code>--reset</code></th><th><code>--reset --since/--until</code></th></tr>
+          <tr><td>Participant, comptes, limites, endpoints, tokens</td><td>supprimés</td><td><strong>conservés</strong></td><td><strong>conservés</strong></td></tr>
+          <tr><td>Transferts / quotes / settlements</td><td>tous</td><td>tous</td><td>seulement <code>createdDate</code> ∈ <code>[since, until)</code></td></tr>
+          <tr><td>Positions</td><td>lignes supprimées</td><td><code>value</code> / <code>reservedValue</code> → <strong>0</strong></td><td><strong>delta</strong> des mouvements retirés (Hub + DFSP)</td></tr>
+          <tr><td>Oracle MSISDN / ALIAS</td><td>supprimés</td><td>supprimés</td><td><strong>intactes</strong> (forcé)</td></tr>
+          <tr><td>MCM / Hydra / Vault</td><td>inchangés</td><td>inchangés</td><td>inchangés</td></tr>
+          <tr><td>Confirmation <code>--execute</code></td><td><code>SUPPRIMER</code></td><td><code>REINITIALISER</code></td><td><code>REINITIALISER</code></td></tr>
         </table>
+        <h3>Réinit périodique (<code>--since</code> / <code>--until</code>)</h3>
+        <p>Uniquement avec <code>--reset</code>. Intervalle <strong>demi-ouvert</strong> <code>[since, until)</code> sur <code>createdDate</code> (transferts, bulk, FX, quotes, settlements, mouvements de position). Formats : <code>YYYY-MM-DD</code> ou <code>YYYY-MM-DD HH:MM:SS</code> (le <code>T</code> / <code>Z</code> ISO sont acceptés).</p>
+        <ul class="check">
+          <li>Pas de remise à zéro globale des positions — uniquement l’inverse du delta des écritures de la fenêtre.</li>
+          <li>Oracles non touchés (équivalent automatique de <code>--skip-oracle</code>).</li>
+          <li>Passer <strong>tous</strong> les DFSP concernés dans le même run pour que les positions Hub / contreparties restent cohérentes.</li>
+          <li>Les fenêtres <code>settlementWindow</code> ne sont pas recréées : vérifier qu’il reste une fenêtre <code>OPEN</code> après coup.</li>
+        </ul>
         <h3>Ce qui est touché (stores)</h3>
         <table>
           <tr><th>Store</th><th>Périmètre</th></tr>
           <tr><td><code>central_ledger</code></td><td>Selon le mode ci-dessus</td></tr>
-          <tr><td>Oracles</td><td><code>oracle_msisdn</code>, <code>oracle_alias</code> (sauf <code>--skip-oracle</code>)</td></tr>
+          <tr><td>Oracles</td><td><code>oracle_msisdn</code>, <code>oracle_alias</code> (sauf <code>--skip-oracle</code> ou mode période)</td></tr>
           <tr><td>Redis <code>--redis</code></td><td>Clés <code>ttk-redis</code> contenant le nom du DFSP</td></tr>
           <tr><td>Mongo <code>--mongo-purge</code></td><td>Vidage <strong>global</strong> de <code>mlos</code>, <code>ttk</code>, <code>reporting_events</code></td></tr>
           <tr><td>Kafka <code>--kafka-purge</code></td><td>Topics Strimzi <code>^topic-</code> (pas par DFSP)</td></tr>
@@ -498,39 +507,53 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
 <pre><code># Simulation purge (défaut) + SQL de relecture
 ./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql &lt;fspid&gt;
 
-# Réinit (DFSP conservé) — dry-run
+# Réinit complète (DFSP conservé) — dry-run
 ./scripts/hub/mojaloop-purge-dfsp.sh --reset --sql-out /tmp/reset-dry.sql &lt;fspid&gt;
 
 # Réinit réelle (etcd ok, tapez REINITIALISER)
 ./scripts/hub/mojaloop-purge-dfsp.sh --reset --execute --scale-down &lt;fspid&gt;
 # exemple fictif : … --reset --execute --scale-down dfsp-a
 
+# Réinit périodique — dry-run puis execute (alias conservés, positions = delta)
+./scripts/hub/mojaloop-purge-dfsp.sh --reset \
+  --since 2026-10-01 --until 2026-10-20 \
+  --sql-out /tmp/reset-period.sql \
+  moov clcam-jardin clcam-calavi moov-bj
+
+./scripts/hub/mojaloop-purge-dfsp.sh --reset \
+  --since 2026-10-01 --until 2026-10-20 \
+  --execute --scale-down \
+  moov clcam-jardin clcam-calavi moov-bj
+
 # Plusieurs inactifs / tests (exemple lab) — purge
 ./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql \
-  <fspid> [<fspid2> …]
+  &lt;fspid&gt; [&lt;fspid2&gt; …]
 
 # Purge réelle : --execute (pas --excute)
 ./scripts/hub/mojaloop-purge-dfsp.sh --execute --scale-down \
-  <fspid> [<fspid2> …]
+  &lt;fspid&gt; [&lt;fspid2&gt; …]
 # exemple fictif : … --execute --scale-down dfsp-a dfsp-b
 </code></pre>
         <table>
           <tr><th>Option</th><th>Effet</th></tr>
           <tr><td><code>--reset</code> / <code>--reinit</code></td><td>Réinit : DFSP conservé ; transferts, positions (à 0), ALIAS, MSISDN vidés</td></tr>
+          <tr><td><code>--since TS</code> / <code>--until TS</code></td><td>Avec <code>--reset</code> uniquement. Intervalle <code>[since, until)</code> sur <code>createdDate</code>. Positions = delta. Oracles intactes. Ex. <code>2026-10-01</code> ou <code>2026-10-01 14:30:00</code>.</td></tr>
           <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>
           <tr><td><code>--execute</code></td><td>COMMIT après un dry-run rejoué</td></tr>
           <tr><td><code>-y</code></td><td>Pas de prompt (<code>SUPPRIMER</code> / <code>REINITIALISER</code>)</td></tr>
+          <tr><td><code>--skip-oracle</code></td><td>Ne pas toucher MSISDN / ALIAS (déjà le cas en mode période)</td></tr>
           <tr><td><code>--no-backup</code></td><td>Pas de mysqldump (défaut : <code>./mojaloop-backups</code>)</td></tr>
           <tr><td><code>--allow-inflight</code></td><td>Autoriser malgré des transferts non finalisés</td></tr>
           <tr><td><code>--scale-down</code> / <code>--restart</code></td><td>Arrêt / redémarrage des Deployments du switch</td></tr>
         </table>
         <div class="note">
           <strong>Transferts ouverts</strong>
-          S’il reste des états <code>RESERVED</code> / <code>RECEIVED_*</code>, <code>--execute</code> est refusé sauf <code>--allow-inflight</code> (alors <code>reservedValue</code> des survivants n’est pas recalculé). Préférer <code>--scale-down</code> et attendre la finalisation.
+          S’il reste des états <code>RESERVED</code> / <code>RECEIVED_*</code> (dans la période si <code>--since/--until</code>), <code>--execute</code> est refusé sauf <code>--allow-inflight</code> (alors <code>reservedValue</code> des survivants n’est pas recalculé). Préférer <code>--scale-down</code> et attendre la finalisation.
         </div>
         <h3>Hors script</h3>
         <ul class="check">
-          <li>Après <code>--reset</code> : reprovisionner les alias ALS / oracle (comme un onboarding). Comptes et endpoints Hub déjà là. Pour retirer des alias <strong>sans</strong> toucher le ledger : <a href="#hub-purge-alias">purge alias</a>.</li>
+          <li>Après <code>--reset</code> <em>sans</em> période : reprovisionner les alias ALS / oracle. Comptes et endpoints Hub déjà là. Pour retirer des alias <strong>sans</strong> toucher le ledger : <a href="#hub-purge-alias">purge alias</a>.</li>
+          <li>Après réinit <strong>périodique</strong> : alias déjà là ; vérifier positions Hub et une fenêtre settlement <code>OPEN</code>.</li>
           <li>Après purge : client Hydra, MCM, CA / certs Vault — l’enrolment reste tant qu’on ne le retire pas à la main.</li>
           <li>Stack SDK 1:1 (<code>manage.sh down</code>) ou détachement overlay (<code>docker stop mcm-agent-…</code> puis <code>just build</code>) — seulement si le DFSP quitte le nœud.</li>
           <li>WAF / DNS du FQDN : inchangés en <code>--reset</code> ; à retirer seulement après une purge complète.</li>
@@ -613,7 +636,7 @@ kubectl get --raw=/healthz/etcd   # attendu : ok
         </div>
         <div class="ctx">
           <strong>Quand utiliser quoi</strong>
-          Alias de test / wrong FSP → <code>mojaloop-purge-alias.sh</code>. Recyclage ledger complet (transferts + MSISDN + tous les ALIAS du DFSP) → <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh --reset</code></a>. Retrait du participant → purge DFSP sans <code>--reset</code>.
+          Alias de test / wrong FSP → <code>mojaloop-purge-alias.sh</code>. Recyclage ledger complet (transferts + MSISDN + tous les ALIAS) → <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh --reset</code></a>. Effacer une fenêtre de tests sans toucher les alias → <code>--reset --since/--until</code>. Retrait du participant → purge sans <code>--reset</code>.
         </div>
       </section>
 
@@ -1571,7 +1594,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
 # 4. CBS : reverting l’URL outbound vers :&lt;PORT_OUTBOUND_ANCIEN&gt;
 </code></pre>
         <p>Vault du DFSP reste up. L’agent n’est arrêté que le temps du <code>just build</code> de détachement, puis relancé pour le SDK 1:1.</p>
-        <p>Ledger Hub : <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh</code></a> — purge (retrait) ou <code>--reset</code> (réinit transferts / positions / ALIAS / MSISDN). MCM / Hydra / Vault restent.</p>
+        <p>Ledger Hub : <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh</code></a> — purge (retrait), <code>--reset</code> (réinit complète), ou <code>--reset --since/--until</code> (période, alias conservés). MCM / Hydra / Vault restent.</p>
 
         <div class="ctx">
           <strong>Contexte actuel exemple <fspid></strong>
@@ -2037,7 +2060,9 @@ just ps                 # sdk-scheme-adapter-*
 # Hub — ledger (docs #hub-purge) : etcd ok, puis dry-run
 export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
 kubectl get --raw=/healthz/etcd
-./scripts/hub/mojaloop-purge-dfsp.sh --reset &lt;fspid&gt;           # réinit
+./scripts/hub/mojaloop-purge-dfsp.sh --reset &lt;fspid&gt;           # réinit complète
+./scripts/hub/mojaloop-purge-dfsp.sh --reset \
+  --since 2026-10-01 --until 2026-10-20 &lt;fspid&gt;             # réinit périodique
 ./scripts/hub/mojaloop-purge-dfsp.sh &lt;fspid&gt;                   # purge complète
 </code></pre>
         <h3>Publier cette doc sur la VM</h3>
