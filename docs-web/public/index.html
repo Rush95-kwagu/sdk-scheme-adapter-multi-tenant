@@ -48,6 +48,7 @@
           <a class="item" href="#mono-config">Configuration</a>
           <a class="item" href="#mono-waf">WAF, MCM, tests</a>
           <a class="item" href="#mono-helm">Chart Helm</a>
+          <a class="item" href="#mono-vault-reboot">Après reboot (Vault)</a>
         </details>
         <details class="nav-group" open>
           <summary>SDK overlay</summary>
@@ -472,7 +473,7 @@ securityContext:
         <ul class="check">
           <li>Pas de remise à zéro globale des positions — uniquement l’inverse du delta des écritures de la fenêtre.</li>
           <li>Oracles non touchés (équivalent automatique de <code>--skip-oracle</code>).</li>
-          <li>Passer <strong>tous</strong> les DFSP concernés dans le même run pour que les positions Hub / contreparties restent cohérentes.</li>
+          <li><strong>Sans liste de DFSP</strong> : découverte automatique de tous les <code>participant.name</code> hors Hub (évite d’en oublier).</li>
           <li>Les fenêtres <code>settlementWindow</code> ne sont pas recréées : vérifier qu’il reste une fenêtre <code>OPEN</code> après coup.</li>
         </ul>
         <h3>Ce qui est touché (stores)</h3>
@@ -514,16 +515,14 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
 ./scripts/hub/mojaloop-purge-dfsp.sh --reset --execute --scale-down &lt;fspid&gt;
 # exemple fictif : … --reset --execute --scale-down dfsp-a
 
-# Réinit périodique — dry-run puis execute (alias conservés, positions = delta)
+# Réinit périodique — tous les DFSP hors Hub (pas de liste)
 ./scripts/hub/mojaloop-purge-dfsp.sh --reset \
-  --since 2026-10-01 --until 2026-10-20 \
-  --sql-out /tmp/reset-period.sql \
-  moov clcam-jardin clcam-calavi moov-bj
+  --since '2026-10-19 18:00:00' --until '2026-10-19 21:00:00' \
+  --sql-out /tmp/reset-period.sql
 
 ./scripts/hub/mojaloop-purge-dfsp.sh --reset \
-  --since 2026-10-01 --until 2026-10-20 \
-  --execute --scale-down \
-  moov clcam-jardin clcam-calavi moov-bj
+  --since '2026-10-19 18:00:00' --until '2026-10-19 21:00:00' \
+  --execute --scale-down
 
 # Plusieurs inactifs / tests (exemple lab) — purge
 ./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql \
@@ -905,6 +904,7 @@ docker run --rm \
 docker exec mcm-agent-${DFSP_ID} printenv AUTH_CLIENT_ID
 docker exec sdk-scheme-adapter-${DFSP_ID} wget -q --spider http://127.0.0.1:5040/metrics
 </code></pre>
+        <div class="note">Après <strong>reboot VM</strong> ou restart Docker : Vault revient <strong>sealed</strong> (<code>vault-init</code> a <code>restart: "no"</code>). Procédure : <a href="#mono-vault-reboot">Après reboot (Vault)</a>.</div>
         <p>Simulateur à la place du CBS :</p>
 <pre><code>./manage.sh --profile simulator up -d
 </code></pre>
@@ -1096,6 +1096,96 @@ kubectl -n dfsp-201 get secret dfsp-vault-recovery-kit -o yaml \
 kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-sdk-internal 4040:4040
 </code></pre>
         <p>Le chart n’active pas l’overlay. Pour N DFSPs en Helm : N releases / N namespaces, analogue à N Compose.</p>
+      </section>
+
+      <section id="mono-vault-reboot" class="section">
+        <div class="badges">
+          <span class="badge">ops</span>
+          <span class="badge">Compose 1:1</span>
+        </div>
+        <h2>Après reboot — unseal Vault (nœud SDK)</h2>
+        <p class="lead">Sur le nœud Docker (<code>&lt;SDK_HOST&gt;</code>), chaque DFSP a son Vault fichier (<code>sdk-vault-&lt;fspid&gt;</code>). Au reboot de la VM (ou restart du démon Docker), Vault redémarre <strong>sealed</strong>. Le job <code>vault-init</code> a <code>restart: "no"</code> : il ne se relance pas seul. L’agent crash alors avec <code>Vault is sealed</code>.</p>
+        <div class="warn">
+          Ne <strong>pas</strong> faire <code>docker volume rm …vault-data…</code> ni <code>vault operator init</code> à nouveau : les clés / role-id sont déjà dans le volume <code>vault-creds</code>. Un wipe détruit la CA et les secrets PM4ML du DFSP.
+        </div>
+
+        <h3>1. Symptômes</h3>
+        <table>
+          <tr><th>Observé</th><th>Cause</th></tr>
+          <tr><td><code>mcm-agent-&lt;fspid&gt;</code> Restarting / unhealthy</td><td>AppRole impossible tant que Vault est sealed</td></tr>
+          <tr><td>Logs agent : <code>Failed to start MCM Agent: Vault is sealed</code></td><td>Attend unseal</td></tr>
+          <tr><td><code>sdk-vault-&lt;fspid&gt;</code> Up, mais <code>Sealed true</code></td><td>Normal après reboot sans vault-init</td></tr>
+          <tr><td><code>sdk-vault-init-&lt;fspid&gt;</code> Exited (souvent depuis le 1er boot)</td><td>Attendu : <code>restart: "no"</code></td></tr>
+        </table>
+<pre><code># sur &lt;SDK_HOST&gt;
+docker ps -a --format 'table {{.Names}}\t{{.Status}}' | grep -E 'vault|mcm-agent'
+docker logs mcm-agent-&lt;fspid&gt; --tail 30
+</code></pre>
+
+        <h3>2. Confirmer sealed</h3>
+<pre><code>for v in $(docker ps --format '{{.Names}}' | grep -E '^sdk-vault-' | grep -v init); do
+  echo "===== $v ====="
+  docker exec "$v" vault status 2&gt;/dev/null | grep -E 'Initialized|Sealed|Version' \
+    || echo "(exec failed)"
+done
+# Attendu juste après reboot : Initialized true · Sealed true
+</code></pre>
+
+        <h3>3. Relancer vault-init (unseal)</h3>
+        <p>Le script monté dans <code>vault-init</code> lit les unseal keys déjà écrites dans <code>vault-creds</code>, unseal, puis réécrit role-id / secret-id si besoin. Exit 0 = OK.</p>
+<pre><code># Lister les jobs présents (DFSPs déjà déployés sur le nœud)
+docker ps -a --format '{{.Names}}' | grep vault-init | sort
+
+# Un DFSP
+docker start sdk-vault-init-&lt;fspid&gt;
+docker logs -f sdk-vault-init-&lt;fspid&gt;
+# Ctrl-C quand exit ; Status doit finir par Exited (0)
+
+# Tous les DFSPs actifs du nœud d’un coup
+docker ps -a --format '{{.Names}}' | grep vault-init | xargs -r docker start
+sleep 5
+docker ps -a --filter name=vault-init --format 'table {{.Names}}\t{{.Status}}'
+</code></pre>
+        <p>Via Compose / <code>manage.sh</code> (répertoire deploy du DFSP) :</p>
+<pre><code>cd "$DEPLOY"   # …/sdk-scheme-adapter/deploy du DFSP
+unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
+./manage.sh up -d vault-init
+./manage.sh logs vault-init --tail 40
+# ou : docker start sdk-vault-init-${DFSP_ID}
+</code></pre>
+
+        <h3>4. Vérifier</h3>
+<pre><code># Sealed false sur chaque Vault actif
+for v in $(docker ps --format '{{.Names}}' | grep -E '^sdk-vault-' | grep -v init); do
+  echo -n "$v → "
+  docker exec "$v" vault status 2&gt;/dev/null | grep Sealed || echo "?"
+done
+
+# Agents qui se stabilisent (healthy / Up sans restart loop)
+docker ps --format 'table {{.Names}}\t{{.Status}}' | grep mcm-agent
+
+# Spot-check un agent
+docker logs mcm-agent-&lt;fspid&gt; --tail 20
+# plus de « Vault is sealed »
+</code></pre>
+        <ul class="check">
+          <li><code>Sealed false</code> sur chaque <code>sdk-vault-&lt;fspid&gt;</code> utile.</li>
+          <li><code>mcm-agent-&lt;fspid&gt;</code> healthy ; websocket <code>:4004</code> OK pour le SDK.</li>
+          <li>SDK 1:1 ou overlay : pas de restart agent en boucle.</li>
+        </ul>
+
+        <h3>Si vault-init échoue</h3>
+        <table>
+          <tr><th>Erreur</th><th>Action</th></tr>
+          <tr><td><code>permission denied</code> sur <code>/vault/data</code></td><td>chown UID du compose (souvent <code>100:100</code>) sur volumes data/creds — voir <a href="#mono-deploy">Déploiement Compose</a>, puis <code>docker start</code> à nouveau</td></tr>
+          <tr><td><code>No such container</code></td><td>Le stack a été <code>rm</code> : <code>./manage.sh up -d vault vault-init …</code> depuis le deploy</td></tr>
+          <tr><td>Vault <code>Initialized false</code></td><td>Volume data perdu — re-init = nouveau DFSP côté secrets ; récupérer un backup creds si possible</td></tr>
+          <tr><td>Agent sealed alors que Vault OK</td><td>Attendre healthcheck / <code>docker restart mcm-agent-&lt;fspid&gt;</code></td></tr>
+        </table>
+        <div class="ctx">
+          <strong>Hub (ml-test) ≠ Vault DFSP</strong>
+          Le Vault Raft du switch (<code>vault-0</code>…, unseal 5/3) est documenté sous <a href="#risques-ops">Runbook overlay</a>. Ici : uniquement les Vaults Compose du nœud SDK.
+        </div>
       </section>
 
       <section id="fonctionnement" class="section">
@@ -1789,6 +1879,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr><td><code>invalid signature</code> PUT /quotes</td><td>JWS peer</td><td>MCM jwscerts 200 ? Vault leader ? Fingerprint <fspid>. Pas 8 restarts agents</td></tr>
           <tr><td>504 quote puis 3208 GET transfer</td><td>Conséquence</td><td>Traiter JWS/mTLS ; ignorer 3208</td></tr>
           <tr><td><code>local node not active</code> MCM</td><td>Vault Raft</td><td><code>VAULT_ADDR=http://127.0.0.1:8200 vault status</code> ; ne pas restart SDK</td></tr>
+          <tr><td><code>Vault is sealed</code> sur mcm-agent (nœud SDK)</td><td>Vault Compose DFSP</td><td><a href="#mono-vault-reboot">unseal via vault-init</a> après reboot</td></tr>
           <tr><td>POST transfer depuis un laptop</td><td>E1</td><td>Couper :11001 WAN ; activer API key</td></tr>
           <tr><td>Restart <code>sdk-fececam</code></td><td>Tous DFSPs du nœud</td><td>Prévenir ; :4004 healthy <strong>avant</strong> restart SDK</td></tr>
         </table>
@@ -1894,6 +1985,7 @@ done
           <tr><td><code>invalid signature</code> sur <fspid> 1:1</td><td>Inspect JWS ; logs <code>mcm-agent-<fspid></code> jwscerts</td></tr>
           <tr><td>POST :6001 depuis un laptop</td><td>Firewall S2 immédiat</td></tr>
           <tr><td>Agent healthy, transferts stale</td><td>Un seul consumer WS (S1)</td></tr>
+          <tr><td><code>Vault is sealed</code> après reboot VM</td><td><a href="#mono-vault-reboot">Relancer <code>sdk-vault-init-&lt;fspid&gt;</code></a> — pas de wipe volume</td></tr>
         </table>
         <h3>Ordre</h3>
         <ol>
