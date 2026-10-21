@@ -1666,7 +1666,7 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
           <tr><th>Store</th><th>Effet</th></tr>
           <tr><td><code>oracle_alias.mappings</code></td><td>Lignes matchées par valeur d’alias et/ou <code>fspId</code></td></tr>
           <tr><td><code>oracle_alias.participants</code></td><td>Seulement avec <code>--clean-participants</code> (fsp sans plus aucun mapping)</td></tr>
-          <tr><td><code>central_ledger</code> / MCM / Hydra / Vault</td><td><strong>Inchangés</strong></td></tr>
+          <tr><td><code>central_ledger</code> / MCM / Hydra / Vault</td><td><strong>Inchangés</strong>. <code>--list-accounts</code> lit seulement les devises des comptes.</td></tr>
         </table>
         <p>Colonne valeur détectée automatiquement : <code>alias</code>, <code>aliasId</code>, <code>partyId</code>, <code>idValue</code> ou <code>value</code>. Cible lab : PXC <code>data/mojaloop-db-pxc-0</code>, secret <code>data/mojaloop-db-secrets</code> clé <code>root</code>.</p>
         <h3>Prérequis</h3>
@@ -1674,8 +1674,29 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
 chmod +x scripts/hub/mojaloop-purge-alias.sh
 kubectl get --raw=/healthz/etcd   # attendu : ok
 </code></pre>
+        <h3>Lister les DFSP et leurs comptes</h3>
+        <p>Lecture seule. Aucun alias ni <code>--fsp</code> n’est requis, et aucun <code>DELETE</code> n’est lancé. La commande part des DFSP déjà présents dans <code>oracle_alias</code> (<code>participants</code> ou <code>mappings</code>), compte leurs alias, puis lit dans <code>central_ledger</code> chaque devise et chaque type de compte (<code>POSITION</code>, <code>SETTLEMENT</code>).</p>
+<pre><code>./scripts/hub/mojaloop-purge-alias.sh --list-accounts
+</code></pre>
+<pre><code>DFSP                        alias  devise   compte
+clcam-calavi                    3  XOF      POSITION
+clcam-calavi                    3  XOF      SETTLEMENT
+moov                            0  XOF      POSITION
+moov                            0  XOF      SETTLEMENT
+</code></pre>
+        <table>
+          <tr><th>Colonne</th><th>Sens</th></tr>
+          <tr><td><code>DFSP</code></td><td><code>fspId</code> trouvé dans l’oracle ALIAS</td></tr>
+          <tr><td><code>alias</code></td><td>Nombre de lignes dans <code>oracle_alias.mappings</code>. <code>0</code> = inscrit dans <code>participants</code>, sans mapping</td></tr>
+          <tr><td><code>devise</code></td><td>Devise du compte ledger (<code>participantCurrency.currencyId</code>). L’oracle ne stocke pas la devise</td></tr>
+          <tr><td><code>compte</code></td><td>Type de compte ledger (<code>ledgerAccountType.name</code>). L’onboarding XOF crée <code>POSITION</code> et <code>SETTLEMENT</code></td></tr>
+        </table>
+        <div class="note">
+          <strong>Qui apparaît</strong>
+          Un participant créé dans le central-ledger sans ligne dans <code>oracle_alias</code> n’est pas listé. Les comptes XOF se créent à la création du participant (MCM, zone <code>XOF</code>, puis central-ledger), pas par cette commande et pas par un <code>INSERT</code> manuel. Ils s’affichent ici seulement après une ligne oracle (mapping alias, ou ligne <code>participants</code>). Une ligne <code>—</code> / <code>(aucun compte ledger)</code> veut dire que le DFSP est dans l’oracle mais n’a aucun compte dans <code>participantCurrency</code>. Autre nom de base ledger : <code>--cl-db NOM</code>.
+        </div>
         <h3>Lister avant de supprimer</h3>
-<pre><code># Tous les alias d’un DFSP
+<pre><code># Tous les alias d’un DFSP (colonnes ALIAS, fspId, id)
 ./scripts/hub/mojaloop-purge-alias.sh --list --fsp &lt;fspid&gt;
 
 # Un ou plusieurs alias (dry-run = affichage + ROLLBACK)
@@ -1706,6 +1727,8 @@ kubectl get --raw=/healthz/etcd   # attendu : ok
         <table>
           <tr><th>Option</th><th>Effet</th></tr>
           <tr><td><code>--list</code></td><td>Affiche les lignes matchées, pas de DELETE</td></tr>
+          <tr><td><code>--list-accounts</code></td><td>DFSP de l’oracle ALIAS, nombre d’alias, devise et type de compte ledger. Lecture seule, sans filtre</td></tr>
+          <tr><td><code>--cl-db NOM</code></td><td>Base ledger lue par <code>--list-accounts</code> (défaut <code>central_ledger</code>)</td></tr>
           <tr><td><code>--fsp DFSP</code></td><td>Filtre / cible tous les alias de ce <code>fspId</code> (répétable)</td></tr>
           <tr><td><code>-f</code> / <code>--alias-file</code></td><td>Liste depuis un fichier</td></tr>
           <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>

@@ -24,6 +24,40 @@ overlay_dir := env("OVERLAY_DIR", justfile_directory())
 default:
     @just --list
 
+# Commandes, arguments et exemples
+help:
+    @printf '%s\n' \
+      'Usage : just <commande> [arguments]' \
+      '' \
+      'Overlay' \
+      '  just build                         découvre les mcm-agent, build et démarre le SDK partagé' \
+      '  just tenants                       id et réseau Docker de chaque mcm-agent démarré' \
+      '  just logs-overlay [tail]           logs du SDK partagé (sdk-fececam), tail défaut 100' \
+      '' \
+      'DFSP sur ce nœud' \
+      '  just ids                           liste les identifiants DFSP' \
+      '  just ps                            conteneurs sdk-scheme-adapter-*' \
+      '  just logs <dfsp> [tail]            logs sdk-scheme-adapter-<id> (nom partiel accepté)' \
+      '  just logs-mcm <dfsp> [tail]        logs mcm-agent-<id>' \
+      '  just ports [from] [count]          ports déjà pris et prochains blocs libres' \
+      '                                     from défaut 4000, count défaut 3' \
+      '                                     bloc : XX00 inbound, XX01 outbound, XX03 mcm,' \
+      '                                     XX04 simulateur, XX40 metrics' \
+      '' \
+      'Exemples' \
+      '  just logs moov' \
+      '  just logs moov 50' \
+      '  just ports' \
+      '  just ports 10300' \
+      '  just ports 10300 1' \
+      '' \
+      'Variables' \
+      '  OVERLAY_DIR=/chemin just build     autre clone que ~/sdk-fececam/...' \
+      '  just --set docker "sudo docker" logs moov' \
+      '' \
+      'just help                              cette aide' \
+      'just --list                            liste courte'
+
 # --- overlay ---
 
 # Découvre mcm-agent-*, génère les réseaux, build + up l’overlay
