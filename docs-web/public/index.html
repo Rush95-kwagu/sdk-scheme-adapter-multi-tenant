@@ -820,7 +820,7 @@ curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
         </ul>
         <div class="ctx">
           <strong>Contexte actuel</strong>
-          extra_hosts agent : hydra/mcm → <code><WAF_WAN></code>, extapi → <code><HUB_EXTAPI></code>. OpenCBS exemple <code><CBS_HOST>:8100/mojaloop</code>. Prochain couple de ports libre historiquement : 10200/10201/10203 (<fspid> l’a pris).
+          extra_hosts agent : hydra/mcm → <code><WAF_WAN></code>, extapi → <code><HUB_EXTAPI></code>. OpenCBS exemple <code><CBS_HOST>:8100/mojaloop</code>. Ports hôte : <code>just ports</code> sur le nœud (juste-fichier overlay) — prochain bloc libre <code>XX00/XX01/XX03/XX04/XX40</code>. <code>just ports 10300 1</code> pour un seul bloc à partir de 10300.
         </div>
       </section>
 
@@ -891,8 +891,9 @@ unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
 ./manage.sh ps
 ./manage.sh logs -f vault-init mcm-agent sdk-scheme-adapter
 </code></pre>
-        <p>Vault-init exit 0. Si <code>mkdir /vault/data/core: permission denied</code> :</p>
+        <p><code>./manage.sh up</code> fait ce <code>chown 100:100</code> sur les volumes Vault <strong>avant</strong> de démarrer (noms résolus, ex. <code>moov-bj_vault-data-moov-bj</code>). Vault-init doit finir exit 0. Si un stack a été lancé avec <code>docker compose</code> seul et que <code>mkdir /vault/data/core: permission denied</code> :</p>
 <pre><code>./manage.sh stop
+# ou, à la main (même effet que manage.sh) :
 docker run --rm \
   -v &lt;projet&gt;_vault-data-${DFSP_ID}:/vault/data \
   -v &lt;projet&gt;_vault-creds-${DFSP_ID}:/vault/creds \
@@ -926,7 +927,7 @@ done
 
         <div class="ctx">
           <strong>Contexte actuel — ports déjà pris sur <SDK_HOST></strong>
-          <fspid> 4000/4001/3000 · <fspid> 5000/5001/5003 · <fspid> 6000/6001/6003 · <fspid> 7000/7001/7003 · <fspid> 8000/8003 · <fspid> 9000/9003 · <fspid> 10000/10001/10003 · <fspid> 10100/10101/10103 · <fspid> 10200/10201/10203 (ensuite cutover overlay). Choisir le prochain couple libre.
+          Inventaire figé (peut être dépassé) : 4000/4001/3000 · 5000/5001/5003 · 6000/6001/6003 · 7000/7001/7003 · 8000/8003 · 9000/9003 · 10000/10001/10003 · 10100/10101/10103 · 10200/10201/10203. Source à jour : <code>just ports</code> sur <code>&lt;SDK_HOST&gt;</code>.
         </div>
       </section>
 
@@ -1528,14 +1529,13 @@ unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
 ./manage.sh ps
 ./manage.sh logs -f vault-init mcm-agent
 </code></pre>
-        <p>Vault-init : exit 0, pas de <code>permission denied</code> sur <code>/vault/data/core</code>. Sinon :</p>
-<pre><code>docker compose stop
-# adapter le préfixe projet Compose
+        <p><code>./manage.sh up</code> aligne déjà data/creds sur <code>100:100</code>. Vault-init : exit 0. Si <code>permission denied</code> sur <code>/vault/data/core</code> (démarrage hors <code>manage.sh</code>) :</p>
+<pre><code>./manage.sh stop
 docker run --rm \
   -v &lt;projet&gt;_vault-data-${DFSP_ID}:/vault/data \
   -v &lt;projet&gt;_vault-creds-${DFSP_ID}:/vault/creds \
   alpine chown -R 100:100 /vault/data /vault/creds
-docker compose rm -f vault-init
+./manage.sh rm -f vault-init
 ./manage.sh up -d vault vault-init redis mcm-agent
 </code></pre>
 <pre><code>docker exec mcm-agent-${DFSP_ID} printenv AUTH_CLIENT_ID
