@@ -30,6 +30,17 @@
           <a class="item" href="#valeur">Mono DFSP vs overlay</a>
         </details>
         <details class="nav-group" open>
+          <summary>Workflow</summary>
+          <a class="item" href="#workflow">Onboarding DFSP</a>
+          <a class="item" href="#workflow-fiche">1. Fiche DFSP</a>
+          <a class="item" href="#workflow-ports">2. Ports</a>
+          <a class="item" href="#workflow-copie">3. Copier le template</a>
+          <a class="item" href="#workflow-edition">4. Éditer les 3 fichiers</a>
+          <a class="item" href="#workflow-start">5. Démarrer</a>
+          <a class="item" href="#workflow-nginx">6. Nginx et DNS</a>
+          <a class="item" href="#workflow-fin">7. MCM et contrôle</a>
+        </details>
+        <details class="nav-group" open>
           <summary>Hub Mojaloop</summary>
           <a class="item" href="#hub">Architecture ml-cc</a>
           <a class="item" href="#hub-net">Réseau, DHCP, NAT</a>
@@ -133,6 +144,311 @@
         </div>
         <div class="note">URLs : <strong>https://docs.ext.<HUB_DOMAIN>/documentation</strong> (WAF) · <code>http://<SDK_HOST>/documentation</code> (VM, LAN).</div>
         <p>Argent en jeu : un transfert vert ne suffit pas. Voir <a href="#risques">Risques transferts</a> (Hub, WAF, Vault, overlay) classés élevé / moyen / faible.</p>
+        <p>Nouvel établissement : suivre <a href="#workflow">Workflow — onboarding DFSP</a> dans l’ordre, sans sauter d’étape.</p>
+      </section>
+
+      <section id="workflow" class="section">
+        <div class="badges">
+          <span class="badge">ops</span>
+          <span class="badge">1 DFSP = 1 copie</span>
+        </div>
+        <h2>Onboarding d’un DFSP</h2>
+        <p class="lead">Procédure à suivre dans l’ordre, de la fiche jusqu’au nginx. Une étape n’est finie que lorsque le résultat attendu est affiché. On ne passe pas à la suivante avant.</p>
+        <p>Deux machines, deux sessions. Ne pas mélanger les commandes.</p>
+        <table>
+          <tr><th>Où</th><th>Connexion</th><th>Rôle</th></tr>
+          <tr><td>Nœud SDK</td><td><code>ssh sdk@172.25.2.117</code></td><td>Copie du template, fichiers, <code>just ports</code>, démarrage Docker</td></tr>
+          <tr><td>WAF</td><td><code>ssh ops@WAF-AGG</code></td><td>Nginx, test que le WAF joint le nœud SDK</td></tr>
+        </table>
+        <div class="ctx">
+          <strong>Valeurs fixes — ne pas les inventer</strong>
+          <table>
+            <tr><th>Quoi</th><th>Valeur</th></tr>
+            <tr><td>IP du nœud SDK (cible nginx)</td><td><code>172.25.2.117</code></td></tr>
+            <tr><td>Zone DNS</td><td><code>openmfi.org</code></td></tr>
+            <tr><td><code>hydra</code> et <code>mcm</code> (extra_hosts)</td><td><code>41.214.65.90</code></td></tr>
+            <tr><td><code>extapi</code> (extra_hosts)</td><td><code>172.16.2.28</code></td></tr>
+            <tr><td>Template à copier</td><td><code>~/dfsp-toolkit-template/sdk-scheme-adapter</code></td></tr>
+          </table>
+        </div>
+        <h3>Ordre</h3>
+        <ol class="steps">
+          <li><a href="#workflow-fiche">Remplir la fiche</a> (identifiant, secret MCM, backend).</li>
+          <li><a href="#workflow-ports">Choisir les ports</a> avec <code>just ports</code>.</li>
+          <li><a href="#workflow-copie">Copier le template</a> dans un dossier au nom du DFSP.</li>
+          <li><a href="#workflow-edition">Éditer les 3 fichiers</a> : <code>.env</code>, <code>docker-compose.yml</code>, <code>default.json</code>.</li>
+          <li><a href="#workflow-start">Démarrer</a> avec <code>unset</code> puis <code>./manage.sh up -d</code>.</li>
+          <li><a href="#workflow-nginx">Nginx et DNS</a> sur le WAF.</li>
+          <li><a href="#workflow-fin">MCM, callbacks, contrôle</a>.</li>
+        </ol>
+        <div class="warn">
+          <strong>À ne pas faire</strong>
+          Ne pas effacer un volume <code>vault-data</code> / <code>vault-creds</code>. Ne pas mettre <code>http://</code> dans <code>BACKEND_ENDPOINT</code>. Ne pas envoyer le FQDN du DFSP vers le port outbound (<code>XX01</code>). Le port <code>4004</code> reste interne à Docker : on ne l’écrit pas dans nginx.
+        </div>
+      </section>
+
+      <section id="workflow-fiche" class="section">
+        <h2>1. Fiche DFSP</h2>
+        <p class="lead">Remplir ce tableau avant toute commande. L’identifiant (ligne A) est le même partout : MCM, Hydra, fichiers, DNS. Minuscules, sans espace. Exemple utilisé ensuite : <code>banque-test</code>. Remplace-le par la ligne A.</p>
+        <table>
+          <tr><th>Ligne</th><th>Information</th><th>Exemple</th><th>Règle</th></tr>
+          <tr><td>A</td><td>Identifiant <code>fspid</code></td><td><code>banque-test</code></td><td>Identique au client créé dans le MCM. Pas de majuscule.</td></tr>
+          <tr><td>B</td><td>Secret</td><td>(collé depuis le MCM)</td><td>Généré dans le MCM à la création du client. Une seule fois. Ne pas l’envoyer dans un chat.</td></tr>
+          <tr><td>C</td><td>FQDN transferts</td><td><code>banque-test.ext.openmfi.org</code></td><td>Toujours <code>ligneA.ext.openmfi.org</code></td></tr>
+          <tr><td>D</td><td>FQDN écran MCM</td><td><code>mcm-banque-test.ext.openmfi.org</code></td><td>Toujours <code>mcm-ligneA.ext.openmfi.org</code></td></tr>
+          <tr><td>E</td><td>Backend CBS</td><td><code>172.16.2.16:8100/mojaloop</code></td><td><code>hôte:port/chemin</code>. Sans <code>http://</code>, sans espace.</td></tr>
+          <tr><td>F</td><td>Port inbound</td><td>rempli à l’étape 2</td><td>WAF → SDK. Conteneur <code>5000</code>.</td></tr>
+          <tr><td>G</td><td>Port outbound</td><td>rempli à l’étape 2</td><td>Tests / CBS vers le SDK. Conteneur <code>5001</code>. Jamais dans nginx.</td></tr>
+          <tr><td>H</td><td>Port MCM</td><td>rempli à l’étape 2</td><td>Écran de l’agent. Conteneur <code>5000</code>.</td></tr>
+          <tr><td>I</td><td>Port simulateur</td><td>rempli à l’étape 2</td><td>Seulement si on n’a pas de CBS. Conteneur <code>3003</code>.</td></tr>
+          <tr><td>J</td><td>Port metrics</td><td>rempli à l’étape 2</td><td>Contrôle santé. Conteneur <code>5040</code>.</td></tr>
+        </table>
+        <div class="note">Le secret (ligne B) se copie au moment où le MCM affiche le client. S’il est perdu, on en régénère un dans le MCM, puis on le remet dans <code>.env</code> et dans <code>default.json</code> (deux endroits).</div>
+      </section>
+
+      <section id="workflow-ports" class="section">
+        <h2>2. Choisir les ports</h2>
+        <p>Sur le <strong>nœud SDK</strong>, depuis le dossier personnel (là où se trouve <code>justfile</code>) :</p>
+<pre><code>cd ~
+just ports
+</code></pre>
+        <p>Résultat attendu : la liste des ports déjà pris, puis un ou plusieurs blocs « Bloc libre ». Chaque bloc donne cinq nombres. Recopie-les dans la fiche.</p>
+        <table>
+          <tr><th>Ligne de la fiche</th><th>Ligne du bloc</th><th>À gauche des deux-points dans le compose</th></tr>
+          <tr><td>F inbound</td><td><code>inbound</code> <code>XX00</code></td><td><code>XX00:5000</code></td></tr>
+          <tr><td>G outbound</td><td><code>outbound</code> <code>XX01</code></td><td><code>XX01:5001</code></td></tr>
+          <tr><td>H MCM</td><td><code>mcm</code> <code>XX03</code></td><td><code>XX03:5000</code></td></tr>
+          <tr><td>I simulateur</td><td><code>simulateur</code> <code>XX04</code></td><td><code>XX04:3003</code></td></tr>
+          <tr><td>J metrics</td><td><code>metrics</code> <code>XX40</code></td><td><code>XX40:5040</code></td></tr>
+        </table>
+        <p>Le nombre <strong>après</strong> les deux-points (<code>5000</code>, <code>5001</code>, <code>5040</code>, <code>3003</code>) ne change jamais. On ne change que le nombre de gauche.</p>
+        <p>Pour ne proposer qu’un bloc à partir d’un numéro (par exemple après la série déjà en service) :</p>
+<pre><code>just ports 10300 1
+</code></pre>
+        <p>Prendre un bloc dont les cinq ports sont marqués libres. Ne pas réutiliser un port listé plus haut comme « occupé ».</p>
+      </section>
+
+      <section id="workflow-copie" class="section">
+        <h2>3. Copier le template</h2>
+        <p>Toujours sur le nœud SDK. Le dossier de travail est un <strong>nouveau</strong> dossier. On ne modifie pas <code>dfsp-toolkit-template</code>.</p>
+<pre><code>cd ~
+export DFSP_ID=banque-test
+cp -a ~/dfsp-toolkit-template/sdk-scheme-adapter ~/dfsp-$DFSP_ID/sdk-scheme-adapter
+cd ~/dfsp-$DFSP_ID/sdk-scheme-adapter/deploy
+pwd
+</code></pre>
+        <p>Remplace <code>banque-test</code> par la ligne A. <code>export</code> ne dure que pour ce terminal : si tu le fermes, retape la ligne <code>export</code> avant les commandes suivantes.</p>
+        <p>Résultat attendu de <code>pwd</code> : <code>/home/sdk/dfsp-banque-test/sdk-scheme-adapter/deploy</code> (avec ton identifiant à la place de <code>banque-test</code>).</p>
+<pre><code>ls -l .env docker-compose.yml config/mcm-agent/default.json manage.sh
+chmod +x ./manage.sh ./scripts/vault-init.sh
+ls -l ./manage.sh
+</code></pre>
+        <p><code>ls -l ./manage.sh</code> doit commencer par <code>-rwx</code>. Le <code>chmod</code> se fait dans <strong>ce</strong> dossier, pas dans celui d’un autre DFSP. Sinon <code>./manage.sh</code> répond <code>Permission denied</code>.</p>
+      </section>
+
+      <section id="workflow-edition" class="section">
+        <h2>4. Éditer les 3 fichiers</h2>
+        <p>Les trois fichiers sont dans <code>deploy/</code>. Dans <code>nano</code> : <code>Ctrl+W</code> cherche, <code>Ctrl+O</code> enregistre, <code>Ctrl+X</code> quitte. L’ancien identifiant est celui déjà écrit dans le template (souvent le DFSP qui a servi de modèle). Remplace <strong>chaque</strong> occurrence par la ligne A. À la fin, une recherche de l’ancien identifiant ne doit plus rien trouver.</p>
+
+        <h3><code>deploy/.env</code></h3>
+<pre><code>cd ~/dfsp-$DFSP_ID/sdk-scheme-adapter/deploy
+nano .env
+</code></pre>
+        <p>Aucune espace autour de <code>=</code>. Pas de guillemets. Pas de <code>http://</code>.</p>
+<pre><code>COMPOSE_PROJECT_NAME=banque-test
+
+AUTH_CLIENT_ID=banque-test
+AUTH_CLIENT_SECRET=LE_SECRET_LIGNE_B
+
+DFSP_FQDN=banque-test.ext.openmfi.org
+API_TYPE=fspiop
+LOG_LEVEL=info
+
+BACKEND_ENDPOINT=172.16.2.16:8100/mojaloop
+USE_SIM_BACKEND=false
+</code></pre>
+        <ul class="check">
+          <li><code>COMPOSE_PROJECT_NAME</code> = ligne A</li>
+          <li><code>AUTH_CLIENT_ID</code> = ligne A</li>
+          <li><code>AUTH_CLIENT_SECRET</code> = ligne B, tel quel</li>
+          <li><code>DFSP_FQDN</code> = ligne C</li>
+          <li><code>BACKEND_ENDPOINT</code> = ligne E</li>
+        </ul>
+        <p>S’il y a des lignes <code>BACKEND_AUTH_*</code> dans le template, les laisser ou les adapter au CBS. Ne pas y mettre le secret MCM.</p>
+
+        <h3><code>deploy/docker-compose.yml</code></h3>
+<pre><code>nano docker-compose.yml
+</code></pre>
+        <p>Chercher l’ancien identifiant et le remplacer par la ligne A dans :</p>
+        <table>
+          <tr><th>Endroit</th><th>Doit devenir</th></tr>
+          <tr><td><code>name:</code></td><td>ligne A</td></tr>
+          <tr><td><code>container_name:</code> (vault, vault-init, redis, mcm-agent, sdk, simulateur)</td><td>le même préfixe qu’avant, avec la ligne A. Exemple : <code>mcm-agent-banque-test</code>, <code>sdk-scheme-adapter-banque-test</code>, <code>sdk-vault-banque-test</code>, <code>sdk-vault-init-banque-test</code></td></tr>
+          <tr><td>Volumes <code>vault-data-…</code> et <code>vault-creds-…</code></td><td>ligne A à la place de l’ancien nom, en haut du fichier <strong>et</strong> dans le bloc <code>volumes:</code> en bas</td></tr>
+          <tr><td><code>DFSP_ID</code> et <code>DFSP_FQDN</code></td><td>lignes A et C</td></tr>
+          <tr><td><code>MGMT_API_WS_URL</code></td><td><code>mcm-agent-</code> + ligne A. Doit être <strong>exactement</strong> le <code>container_name</code> de l’agent.</td></tr>
+          <tr><td><code>PKI_CN</code> s’il est présent</td><td><code>banque-test Root CA</code></td></tr>
+        </table>
+        <p>Puis les ports. Seul le nombre <strong>à gauche</strong> change, avec la fiche :</p>
+<pre><code># mcm-agent
+ports:
+  - "LIGNE_H:5000"
+
+# sdk-scheme-adapter
+ports:
+  - "LIGNE_F:5000"
+  - "LIGNE_G:5001"
+  - "LIGNE_J:5040"
+
+# sim-backend (profil simulator)
+ports:
+  - "LIGNE_I:3003"
+</code></pre>
+        <p>Exemple si la fiche donne 10300 / 10301 / 10303 / 10304 / 10340 :</p>
+<pre><code>  - "10303:5000"    # agent MCM
+  - "10300:5000"    # inbound, celui du WAF
+  - "10301:5001"    # outbound
+  - "10340:5040"    # metrics
+  - "10304:3003"    # simulateur
+</code></pre>
+        <div class="warn">Ne pas modifier <code>extra_hosts</code> (<code>41.214.65.90</code> et <code>172.16.2.28</code>). Ne pas ajouter de ligne <code>ports</code> pour <code>4004</code> : il est déjà en <code>expose</code>.</div>
+
+        <h3><code>deploy/config/mcm-agent/default.json</code></h3>
+<pre><code>nano config/mcm-agent/default.json
+</code></pre>
+        <p>JSON : virgules entre les champs, pas de virgule après le dernier. Remplacer l’ancien identifiant et l’ancien secret.</p>
+        <table>
+          <tr><th>Champ</th><th>Valeur</th></tr>
+          <tr><td><code>common.dfspId</code></td><td>ligne A</td></tr>
+          <tr><td><code>mcm.auth.creds.clientId</code></td><td>ligne A</td></tr>
+          <tr><td><code>mcm.auth.creds.clientSecret</code></td><td>ligne B</td></tr>
+          <tr><td><code>mcm.auth.tokenPath</code></td><td><code>/oauth2/token</code> (ne pas mettre un chemin <code>/realms/dfsps/…</code>)</td></tr>
+          <tr><td><code>mcm.auth.tokenEndpoint</code></td><td><code>https://hydra.ext.openmfi.org/oauth2/token</code></td></tr>
+          <tr><td><code>sdk.oauth.clientKey</code></td><td>ligne A</td></tr>
+          <tr><td><code>sdk.oauth.clientSecret</code></td><td>ligne B (le même secret que plus haut)</td></tr>
+          <tr><td><code>sdk.fqdn</code></td><td>ligne C, sans <code>https://</code></td></tr>
+          <tr><td><code>sdk.callbackUrl</code></td><td><code>https://</code> + ligne C</td></tr>
+          <tr><td><code>dfspServerCsrParameters</code> CN et DNS</td><td>ligne C</td></tr>
+          <tr><td>CN de la CA et du client</td><td>ligne A</td></tr>
+        </table>
+        <p>Les adresses <code>extapi.openmfi.org</code> restent. Pas de <code>:443</code> à la fin des URL.</p>
+        <p>Contrôle : l’ancien identifiant a disparu des trois fichiers.</p>
+<pre><code>grep -n "ANCIEN_ID" .env docker-compose.yml config/mcm-agent/default.json || echo "OK: ancien identifiant absent"
+python3 -m json.tool config/mcm-agent/default.json &gt;/dev/null &amp;&amp; echo "OK: JSON valide"
+</code></pre>
+        <p>Remplace <code>ANCIEN_ID</code> par l’identifiant qui était dans le template. Les deux lignes doivent afficher <code>OK</code>.</p>
+      </section>
+
+      <section id="workflow-start" class="section">
+        <h2>5. Démarrer le stack</h2>
+        <p>Toujours dans <code>deploy/</code>, <strong>avant</strong> <code>./manage.sh</code>. Ces <code>unset</code> empêchent le terminal de réutiliser le secret ou le nom d’un autre DFSP.</p>
+<pre><code>cd ~/dfsp-$DFSP_ID/sdk-scheme-adapter/deploy
+unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
+unset DFSP_ID DFSP_FQDN HUB_IAM_PROVIDER_URL MCM_SERVER_ENDPOINT
+./manage.sh up -d
+</code></pre>
+        <p><code>up</code> aligne d’abord les volumes Vault sur l’utilisateur <code>100:100</code>, puis démarre. Résultat attendu : la ligne <code>manage.sh: chown 100:100 on …</code>, puis les conteneurs créés, sans <code>permission denied</code>.</p>
+<pre><code>./manage.sh ps
+./manage.sh logs vault-init
+</code></pre>
+        <ul class="check">
+          <li><code>sdk-vault-init-…</code> finit par <code>Exited (0)</code>.</li>
+          <li><code>mcm-agent-…</code> passe <code>healthy</code> (attendre jusqu’à une minute).</li>
+          <li><code>sdk-scheme-adapter-…</code> est <code>Up</code>.</li>
+        </ul>
+        <p>Les <code>unset</code> effacent <code>DFSP_ID</code> dans ce terminal. Pour les commandes suivantes, retaper <code>export DFSP_ID=banque-test</code> (ligne A). Si l’agent répète <code>Vault is sealed</code> :</p>
+<pre><code>export DFSP_ID=banque-test
+docker start sdk-vault-init-$DFSP_ID
+docker logs sdk-vault-init-$DFSP_ID
+</code></pre>
+        <p>Après un reboot du nœud, refaire cette commande <code>docker start</code> pour chaque DFSP. Le détail est dans <a href="#mono-vault-reboot">Après reboot (Vault)</a>.</p>
+<pre><code>export DFSP_ID=banque-test
+docker exec mcm-agent-$DFSP_ID printenv AUTH_CLIENT_ID
+</code></pre>
+        <p>La réponse doit être la ligne A, rien d’autre. Si c’est l’identifiant d’un autre DFSP, les <code>unset</code> ont été oubliés : refaire les <code>unset</code>, puis <code>./manage.sh up -d --force-recreate mcm-agent</code>.</p>
+      </section>
+
+      <section id="workflow-nginx" class="section">
+        <h2>6. Nginx et DNS</h2>
+        <p>Sur le <strong>WAF</strong> (<code>ops@WAF-AGG</code>). Vérifier d’abord que le WAF voit le nœud SDK. <code>-c</code> attend un nombre, puis l’adresse. Pas de <code>http://</code>.</p>
+<pre><code>ping -c 2 172.25.2.117
+</code></pre>
+        <p>Résultat attendu : 2 réponses, 0 % de perte. Sinon, ne pas éditer nginx : le trafic n’arrivera pas au SDK.</p>
+
+        <h3>DNS</h3>
+        <p>Deux noms, la même adresse IP que les autres DFSP déjà en service (celle de <code>moov.ext.openmfi.org</code>) :</p>
+        <ul class="check">
+          <li>ligne C — <code>banque-test.ext.openmfi.org</code></li>
+          <li>ligne D — <code>mcm-banque-test.ext.openmfi.org</code></li>
+        </ul>
+
+        <h3>Fichier nginx</h3>
+        <p>Fichier déjà utilisé pour les autres DFSP, en général <code>/etc/nginx/sites-available/openmfi.org</code>.</p>
+<pre><code>sudo nano /etc/nginx/sites-available/openmfi.org
+</code></pre>
+        <p>1. Dans le bloc <code>listen 80</code>, ajouter les deux noms dans <code>server_name</code> (à côté de <code>moov.ext.openmfi.org</code> et <code>mcm-moov.ext.openmfi.org</code>).</p>
+        <p>2. Copier le bloc HTTPS de <code>moov.ext.openmfi.org</code> et le coller à la suite. Changer seulement le nom et le port inbound (ligne F) :</p>
+<pre><code>server {
+    listen 443 ssl;
+    http2 on;
+    server_name banque-test.ext.openmfi.org;
+
+    ssl_certificate     /etc/letsencrypt/live/openmfi.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/openmfi.org/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass http://172.25.2.117:LIGNE_F;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_http_version 1.1;
+        proxy_connect_timeout 300s;
+        proxy_read_timeout    300s;
+        proxy_send_timeout    300s;
+    }
+}
+</code></pre>
+        <p>3. Copier le bloc <code>mcm-moov.ext.openmfi.org</code>. Nom = ligne D. Port = ligne H. Garder les lignes <code>Upgrade</code> et <code>Connection</code> de ce bloc (l’écran MCM en a besoin).</p>
+<pre><code>proxy_pass http://172.25.2.117:LIGNE_H;
+</code></pre>
+        <div class="warn">Le FQDN de la ligne C pointe vers la ligne F (<code>XX00</code>), jamais vers la ligne G (<code>XX01</code>). Le port outbound n’est pas publié sur le WAF.</div>
+<pre><code>sudo nginx -t &amp;&amp; sudo systemctl reload nginx
+</code></pre>
+        <p>Résultat attendu : <code>syntax is ok</code> et <code>test is successful</code>. Si <code>nginx -t</code> échoue, ne pas recharger : corriger le fichier et relancer <code>nginx -t</code>.</p>
+<pre><code>curl -skI https://banque-test.ext.openmfi.org/ping
+</code></pre>
+        <p>Résultat attendu : <code>HTTP/2 405</code>. Un <code>502</code> veut dire que le port de gauche dans <code>proxy_pass</code> n’est pas le port inbound, ou que le conteneur SDK n’est pas démarré.</p>
+      </section>
+
+      <section id="workflow-fin" class="section">
+        <h2>7. MCM et contrôle</h2>
+        <h3>Écran MCM</h3>
+        <p>Ouvrir <code>https://mcm-banque-test.ext.openmfi.org</code> (ligne D). L’enrôlement doit avancer jusqu’au statut <strong>8/8</strong>. Tant qu’un certificat est en attente, le signer dans l’admin du Hub.</p>
+        <p>Tous les callbacks FSPIOP = <code>https://</code> + ligne C, sans chemin <code>/quotes</code>, sans adresse IP, sans <code>http://</code>. Un callback en <code>http://</code> laisse passer un GET puis fait échouer le transfert.</p>
+
+        <h3>Contrôle sur le nœud SDK</h3>
+<pre><code>export DFSP_ID=banque-test
+cd ~/dfsp-$DFSP_ID/sdk-scheme-adapter/deploy
+unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
+./manage.sh health
+docker logs mcm-agent-$DFSP_ID --tail 30
+</code></pre>
+        <ul class="check">
+          <li><code>Redis: OK</code>, agent et SDK <code>healthy</code> ou <code>running</code>.</li>
+          <li>Les logs agent ne contiennent plus <code>Vault is sealed</code>.</li>
+          <li><code>https://</code> ligne C <code>/ping</code> répond 405.</li>
+          <li>L’écran MCM (ligne D) s’ouvre.</li>
+          <li>Statut MCM 8/8.</li>
+        </ul>
+        <p>Le DFSP est onboardé quand ces cinq points sont vrais. Les tests de transfert se font ensuite vers <code>http://172.25.2.117:</code> ligne G <code>/transfers</code> (outbound), pas vers le WAF.</p>
       </section>
 
       <section id="hub" class="section">

@@ -262,7 +262,7 @@ ports from="4000" count="3":
     }
 
     echo "Ports publiés par Docker"
-    if [[ ${#OWNER[@]} -eq 0 ]]; then
+    if [[ ${#port_keys[@]} -eq 0 ]]; then
       echo "  (aucun)"
     else
       {
@@ -272,19 +272,19 @@ ports from="4000" count="3":
             [[ -n "$name" ]] || continue
             printf '%s\t%s\t%s\t%s\t%s\n' "$p" "$role" "$name" "$cport" "$state"
           done <<<"${OWNER[$p]}"
-        done < <(printf '%s\n' "${!OWNER[@]}" | sort -n)
+        done < <(printf '%s\n' "${port_keys[@]}" | sort -n)
       } | column -t -s $'\t'
     fi
 
     echo
     echo "Écoute hôte sans publication Docker"
     bare=0
-    if [[ ${#LISTEN[@]} -gt 0 ]]; then
+    if [[ ${#listen_keys[@]} -gt 0 ]]; then
       while read -r p; do
-        [[ -n "${OWNER[$p]:-}" ]] && continue
+        [[ -n "${OWNER[$p]+x}" ]] && continue
         printf '  %s\n' "$p"
         bare=1
-      done < <(printf '%s\n' "${!LISTEN[@]}" | sort -n)
+      done < <(printf '%s\n' "${listen_keys[@]}" | sort -n)
     fi
     [[ "$bare" == 1 ]] || echo "  (aucune)"
 
@@ -300,8 +300,8 @@ ports from="4000" count="3":
     }
 
     hi=$FROM
-    if [[ ${#OWNER[@]} -gt 0 ]]; then
-      top=$(printf '%s\n' "${!OWNER[@]}" | sort -n | tail -n 1)
+    if [[ ${#port_keys[@]} -gt 0 ]]; then
+      top=$(printf '%s\n' "${port_keys[@]}" | sort -n | tail -n 1)
       hi=$(( (top / STEP) * STEP ))
       [[ "$hi" -lt "$FROM" ]] && hi=$FROM
     fi
