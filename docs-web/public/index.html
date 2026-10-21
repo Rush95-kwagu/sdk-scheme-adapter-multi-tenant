@@ -16,7 +16,7 @@
         <span class="brand-mark" aria-hidden="true">S</span>
         <div>
           <h1>Scheme Mojaloop</h1>
-          <p>Hub ml-test · WAF · nœud SDK · risques</p>
+          <p>Hub, puis un DFSP, puis le SDK partagé</p>
         </div>
       </div>
       <label class="search">
@@ -25,13 +25,21 @@
       </label>
       <div class="nav-scroll">
         <details class="nav-group" open>
-          <summary>Vue d’ensemble</summary>
+          <summary>Parcours</summary>
           <a class="item" href="#accueil">Accueil</a>
-          <a class="item" href="#valeur">SDK MONO_DFSP vs MULTI_DFSP</a>
         </details>
         <details class="nav-group" open>
-          <summary>Workflow</summary>
-          <a class="item" href="#workflow">Onboarding DFSP</a>
+          <summary>1. Hub</summary>
+          <a class="item" href="#hub">Architecture</a>
+          <a class="item" href="#hub-prereq">Prérequis et Proxmox</a>
+          <a class="item" href="#hub-net">Réseau, DHCP, NAT</a>
+          <a class="item" href="#hub-env">Environnements</a>
+          <a class="item" href="#hub-deploy">Déploiement Flux</a>
+          <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
+        </details>
+        <details class="nav-group" open>
+          <summary>2. Premier DFSP</summary>
+          <a class="item" href="#workflow">Onboarding</a>
           <a class="item" href="#workflow-fiche">1. Fiche DFSP</a>
           <a class="item" href="#workflow-ports">2. Ports</a>
           <a class="item" href="#workflow-copie">3. Copier le template</a>
@@ -42,42 +50,37 @@
           <a class="item" href="#mono-vault-reboot">Après reboot (Vault)</a>
         </details>
         <details class="nav-group" open>
-          <summary>Hub Mojaloop</summary>
-          <a class="item" href="#hub">Architecture ml-cc</a>
-          <a class="item" href="#hub-net">Réseau, DHCP, NAT</a>
-          <a class="item" href="#hub-prereq">Prérequis et Proxmox</a>
-          <a class="item" href="#hub-env">Environnements</a>
-          <a class="item" href="#hub-deploy">Déploiement Flux</a>
-          <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
+          <summary>3. SDK partagé</summary>
+          <a class="item" href="#valeur">Quand le partager</a>
+          <a class="item" href="#fonctionnement">Fonctionnement</a>
+          <a class="item" href="#fonctionnalites">Fonctionnalités</a>
+          <a class="item" href="#prerequis">Prérequis</a>
+          <a class="item" href="#deploiement">Déploiement</a>
+          <a class="item" href="#nouveau-dfsp">Nouveau DFSP</a>
+          <a class="item" href="#dfsp-existant">Cutover d’un SDK dédié</a>
+          <a class="item" href="#securite">Sécurité</a>
+        </details>
+        <details class="nav-group" open>
+          <summary>4. Scheme en service</summary>
           <a class="item" href="#hub-purge">Purge / réinit / période</a>
           <a class="item" href="#hub-purge-alias">Purge alias ALS</a>
         </details>
         <details class="nav-group" open>
-          <summary>SDK overlay</summary>
-          <a class="item" href="#fonctionnement">Fonctionnement</a>
-          <a class="item" href="#fonctionnalites">Fonctionnalités</a>
-          <a class="item" href="#deploiement">Déploiement sdk multi-tenant</a>
-          <a class="item" href="#prerequis">Prérequis sdk multi-tenant</a>
-          <a class="item" href="#nouveau-dfsp">Nouveau DFSP → sdk multi-tenant</a>
-          <a class="item" href="#dfsp-existant">Cutover SDK mono-tenant</a>
-        </details>
-        <details class="nav-group" open>
-          <summary>Risques transferts</summary>
-          <a class="item" href="#risques">Synthèse</a>
-          <a class="item" href="#risques-eleve">Élevé</a>
-          <a class="item" href="#risques-moyen">Moyen</a>
-          <a class="item" href="#risques-faible">Faible</a>
-          <a class="item" href="#risques-ops">Runbook sdk multi-tenant</a>
-          <a class="item" href="#risques-mono">SDK 1:1 — inventaire</a>
-          <a class="item" href="#risques-mono-failles">SDK 1:1 — failles</a>
-          <a class="item" href="#risques-mono-ops">SDK 1:1 — runbook</a>
-          <a class="item" href="#risques-infra">Infra — imbrication</a>
-          <a class="item" href="#risques-infra-failles">Infra — failles F1–F14</a>
-          <a class="item" href="#risques-infra-hdd">Infra — plan et mesures</a>
+          <summary>5. Incidents</summary>
+          <a class="item" href="#risques">Synthèse transferts</a>
+          <a class="item" href="#risques-eleve">Transferts — élevé</a>
+          <a class="item" href="#risques-moyen">Transferts — moyen</a>
+          <a class="item" href="#risques-faible">Transferts — faible</a>
+          <a class="item" href="#risques-ops">Runbook SDK partagé</a>
+          <a class="item" href="#risques-mono">SDK dédié — inventaire</a>
+          <a class="item" href="#risques-mono-failles">SDK dédié — failles</a>
+          <a class="item" href="#risques-mono-ops">SDK dédié — runbook</a>
+          <a class="item" href="#risques-infra">Infra — cause</a>
+          <a class="item" href="#risques-infra-failles">Infra — failles</a>
+          <a class="item" href="#risques-infra-hdd">Infra — mesures</a>
         </details>
         <details class="nav-group" open>
           <summary>Référence</summary>
-          <a class="item" href="#securite">Sécurité sdk multi-tenant</a>
           <a class="item" href="#ports">Ports et URL</a>
         </details>
         <p class="nav-empty" id="nav-empty">Aucune page ne correspond.</p>
@@ -99,7 +102,7 @@
           <span class="badge">overlay</span>
         </div>
         <h2>Du Hub aux transferts</h2>
-        <p class="lead">Trois couches : le <strong>Hub</strong> (Control Center / cluster de test IaC), le <strong>SDK mono-tenant</strong> du toolkit, l’<strong>overlay multi-tenant</strong>. Les commandes utilisent des <strong>placeholders</strong> ; un exemple fictif figure ci-dessous.</p>
+        <p class="lead">Le sommaire est l’ordre du scheme : <strong>1. Hub</strong>, <strong>2. premier DFSP</strong>, <strong>3. SDK partagé</strong>, <strong>4. scheme en service</strong>, <strong>5. incidents</strong>. Suivant et Précédent suivent cette ligne.</p>
         <div class="ctx">
           <strong>Placeholders — exemple fictif (RFC 5737)</strong>
           <table>
@@ -122,20 +125,330 @@
         <div class="cards three">
           <div class="card">
             <h3>Hub Mojaloop</h3>
-            <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Ledger : <a href="#hub-purge">purge, <code>--reset</code> ou période</a> · alias : <a href="#hub-purge-alias">purge ALIAS</a>.</p>
+            <p>Talos, Flux, Proxmox : d’abord la machine, le réseau, puis Flux et le DNS. <a href="#hub">Étape 1</a>.</p>
           </div>
           <div class="card">
             <h3>SDK dédié (défaut)</h3>
-            <p>Vault + mcm-agent + SDK officiel + Redis. Un bloc de ports par DFSP. Procédure : <a href="#workflow">Workflow</a>.</p>
+            <p>Un dossier, un Vault, un agent, un SDK. <a href="#workflow">Étape 2</a>.</p>
           </div>
           <div class="card">
             <h3>Overlay (opt-in)</h3>
-            <p>Conteneur <code>sdk-fececam</code>, image <code>sdk-scheme-adapter-multi-dfsp</code>. Un process, N agents. Build : <code>just build</code>. Voir <a href="#valeur">Mono vs overlay</a>.</p>
+            <p>Un process pour plusieurs agents, seulement après un DFSP dédié qui marche. <a href="#valeur">Étape 3</a>.</p>
           </div>
         </div>
         <div class="note">URLs : <strong>https://docs.ext.<HUB_DOMAIN>/documentation</strong> (WAF) · <code>http://<SDK_HOST>/documentation</code> (VM, LAN).</div>
         <p>Argent en jeu : un transfert vert ne suffit pas. Voir <a href="#risques">Risques transferts</a> (Hub, WAF, Vault, overlay) classés élevé / moyen / faible.</p>
         <p>Nouvel établissement : suivre <a href="#workflow">Workflow — onboarding DFSP</a> dans l’ordre, sans sauter d’étape.</p>
+      </section>
+
+      <section id="hub" class="section">
+        <h2>Hub — architecture Control Center</h2>
+        <p>Le switch se déploie en IaC (Terraform + Talos + Flux) depuis le toolkit. Deux clusters distincts :</p>
+        <table>
+          <tr><th>Cluster</th><th>Rôle</th><th>Contenu</th></tr>
+          <tr><td><code>ml-cc</code></td><td>Control Center (<code>tooling</code>)</td><td>Harbor, MinIO, Vault, observabilité</td></tr>
+          <tr><td><code>ml-test</code></td><td>Cluster de test / switch</td><td>Même outil, autre répertoire d’environnement, <strong>autre zone DNS</strong></td></tr>
+        </table>
+        <p>Les deux ne doivent <strong>pas</strong> publier les mêmes noms dans la même zone : external-dns est en <code>policy: sync</code> et <em>efface</em> les enregistrements qu’il ne gère plus.</p>
+        <p>Cible DNS publique : l’annotation <code>external-dns.alpha.kubernetes.io/target</code> est la seule valeur envoyée au DNS. Cilium reste privé. <code>*.int</code> → IP LAN du gateway interne. <code>*.ext</code> de <em>ce</em> cluster → <code>wan</code> (IP de bordure).</p>
+        <p>Guide générique toolkit : <code>docs/adopter/deployment-cc.md</code>. Source lab : <code>docs/adopter/deployment-cc-lab-openmfi.md</code>. Nested Sonatel→Proxmox→Talos et I/O etcd : <a href="#risques-infra">risques infra</a>.</p>
+        <div class="ctx">
+          <strong>Contexte actuel — lab (zone <HUB_DOMAIN>) (validé)</strong>
+          <table>
+            <tr><th>Objet</th><th>Adresse cluster</th><th>Cible DNS</th></tr>
+            <tr><td><code>gw-int</code></td><td><code><GW_INT_LAN></code></td><td><code><GW_INT_LAN></code> (pas de <code>wan</code>)</td></tr>
+            <tr><td><code>gw-ext</code></td><td><code><GW_EXT_LAN></code></td><td><code>wan</code> : d’abord <code><PVE_HOST></code>, puis public <code><WAF_WAN></code></td></tr>
+          </table>
+          <p>Kustomizations Ready : <code>platform</code>, <code>dns</code>, <code>platform-config</code>, <code>talos</code>, <code>tooling</code>, <code>tooling-config</code>, <code>tooling-observability</code>, <code>tooling-observability-routes</code>, <code>tooling-routes</code>.</p>
+        </div>
+      </section>
+
+      <section id="hub-prereq" class="section">
+        <h2>Hub — prérequis hôte et Proxmox</h2>
+        <p>From scratch sur l’hôte d’IaC, <strong>en root</strong>, avant <code>make apply</code>. Même utilisateur Unix pour <code>plan</code> et <code>apply</code> (lock <code>/tmp/terraform-provider-proxmox-id-gen.lock</code>).</p>
+        <table>
+          <tr><th>Outil</th><th>Rôle</th></tr>
+          <tr><td>Terraform ≥ 1.6</td><td>VM, Talos, Flux</td></tr>
+          <tr><td>make, yq <strong>mikefarah v4</strong>, jq, python3</td><td>Makefile / schéma (pas le yq Python)</td></tr>
+          <tr><td>flux CLI, kubectl, talosctl</td><td>talosctl aligné Talos v1.13.7</td></tr>
+          <tr><td>sshpass</td><td>Test mot de passe SSH provider seulement</td></tr>
+        </table>
+<pre><code>sudo apt update &amp;&amp; sudo apt install -y wget gnupg lsb-release curl jq python3 make unzip
+
+wget -O- https://apt.releases.hashicorp.com/gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+  | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update &amp;&amp; sudo apt install -y terraform
+terraform version
+
+curl -s https://fluxcd.io/install.sh | sudo bash
+curl -sL https://talos.dev/install | sh
+curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+</code></pre>
+
+        <h3>Proxmox</h3>
+        <div class="ctx">
+          <strong>Contexte actuel</strong> — nœud <code>monproxmox</code>, UI <code>https://<PVE_HOST>:8006</code>, datastore <code>local</code> (pas de <code>local-lvm</code>).
+        </div>
+<pre><code>pvesm set local --content iso,vztmpl,backup,snippets,images,rootdir
+
+pveum user token add terraform-toolkit@pve 'mojaloop-token' --privsep 0
+pveum aclmod / -user terraform-toolkit@pve -role Administrator
+</code></pre>
+        <p>Le provider importe disques / snippets en <strong>SSH mot de passe</strong> (<code>agent = false</code>), utilisateur capable de <code>qm</code> (root). Si <code>sshd</code> a <code>AllowGroups mojaloop</code> :</p>
+<pre><code>usermod -aG mojaloop root
+sshd -T | grep allowgroups
+getent group mojaloop
+</code></pre>
+      </section>
+
+      <section id="hub-net" class="section">
+        <h2>Hub — réseau, DHCP, NAT</h2>
+        <p>Point qui bloque le plus souvent le premier boot Talos. Principe générique : si l’hôte a <strong>deux interfaces dans le même /24</strong> (NIC physique + pont VM), le noyau répond DHCP et route vers les VM par la NIC. La VM, branchée seulement sur le pont, ne voit rien.</p>
+        <p>Symptôme Talos : <code>IP</code> vide, <code>CONNECTIVITY FAILED</code>, <code>STAGE: Booting</code>, Discover DHCP sans Offer.</p>
+        <p>Cible propre : une seule adresse du LAN sur le pont, NIC physique en port du pont. Contournement : routes hôte <code>/32</code> vers le pont + SNAT.</p>
+
+        <div class="ctx">
+          <strong>Contexte actuel — hôte Proxmox <code>monproxmox</code></strong>
+          <table>
+            <tr><th>Interface</th><th>Adresse</th><th>Rôle</th></tr>
+            <tr><td><code>eno1</code></td><td><code><PVE_HOST>/24</code></td><td>LAN physique, GW <code><LAN_GW></code>, SSH, Internet</td></tr>
+            <tr><td><code>vmbr0</code></td><td><code><BRIDGE_IP>/24</code></td><td>Pont Talos, aucune NIC esclave</td></tr>
+            <tr><td><code>tailscale0</code></td><td><code><TAILSCALE_IP>/32</code></td><td>Admin</td></tr>
+          </table>
+          <p>Plan <code>ml-cc</code> (exclure du DHCP : GW physique, hôte, VIP, LB) :</p>
+          <table>
+            <tr><th>Adresse</th><th>Usage</th></tr>
+            <tr><td><code><LAN_GW></code></td><td>Passerelle LAN physique</td></tr>
+            <tr><td><code><PVE_HOST></code></td><td>Hôte <code>eno1</code></td></tr>
+            <tr><td><code><BRIDGE_IP></code></td><td>Hôte pont : GW / DNS / DHCP des VM</td></tr>
+            <tr><td><code><CLUSTER_VIP></code></td><td><code>cluster.vip</code> (API K8s)</td></tr>
+            <tr><td><code>&lt;GW_INT_LAN&gt;</code> / <code>&lt;GW_EXT_LAN&gt;</code></td><td><code>gw-int.lan</code> / <code>gw-ext.lan</code></td></tr>
+            <tr><td><code>&lt;DHCP_START&gt;</code>–<code>&lt;DHCP_END&gt;</code></td><td>Pool DHCP</td></tr>
+            <tr><td><code><WAF_WAN></code></td><td><code>gw-ext.wan</code></td></tr>
+          </table>
+          <p><code>ml-test</code> : autre VIP et autre LB-IPAM, sans recouvrir les adresses de <code>ml-cc</code>.</p>
+        </div>
+
+        <h3>Routes et NAT (avant le premier boot Talos)</h3>
+        <p>Session console Proxmox ou Tailscale — pas seulement SSH sur l’IP <code>eno1</code> (le NAT peut vous couper).</p>
+<pre><code># Exemple fictif : LAN_PREFIX=192.0.2  DHCP 50–90  BRIDGE_IP=192.0.2.1
+LAN_PREFIX=192.0.2
+for i in $(seq 50 90); do
+  ip route replace ${LAN_PREFIX}.$i/32 dev vmbr0 src &lt;BRIDGE_IP&gt;
+done
+ip route replace <CLUSTER_VIP>/32 dev vmbr0 src <BRIDGE_IP>
+ip route replace <GW_INT_LAN>/32 dev vmbr0 src <BRIDGE_IP>
+ip route replace <GW_EXT_LAN>/32 dev vmbr0 src <BRIDGE_IP>
+
+sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv4.conf.all.rp_filter=0
+sysctl -w net.ipv4.conf.vmbr0.rp_filter=0
+sysctl -w net.ipv4.conf.eno1.rp_filter=0
+
+iptables -I FORWARD 1 -i vmbr0 -o eno1 -j ACCEPT
+iptables -I FORWARD 1 -i eno1 -o vmbr0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -t nat -I POSTROUTING 1 -m iprange --src-range <DHCP_START>-<DHCP_END> \
+  -o eno1 -j SNAT --to-source <PVE_HOST>
+iptables -I INPUT -i vmbr0 -p udp --dport 53 -j ACCEPT
+iptables -I INPUT -i vmbr0 -p udp --dport 67 -j ACCEPT
+
+ip route get <VM_DHCP_EX>
+# attendu : dev vmbr0 src <BRIDGE_IP>
+</code></pre>
+        <div class="warn">Ne pas NAT un préfixe trop large (<code>/27</code> mal aligné) : il peut <strong>exclure</strong> des adresses du pool. Utiliser <code>/32</code> ou <code>iprange</code>. Ces règles disparaissent au reboot hôte.</div>
+        <p>Contrôle : <code>tcpdump -n -i eno1 host 1.1.1.1</code> pendant un ping VM → source <code>&lt;PVE_HOST&gt;</code>, pas l’IP de la VM.</p>
+
+        <h3>DHCP (Kea ou dnsmasq)</h3>
+        <p>Écoute sur le pont. Passerelle annoncée = IP de l’hôte <strong>sur le pont</strong>, pas la GW du LAN physique (injoignable depuis le pont isolé).</p>
+<pre><code>sudo apt update &amp;&amp; sudo apt install -y kea-dhcp4-server
+# /etc/kea/kea-dhcp4.conf — interfaces: vmbr0
+# subnet <LAN_CIDR>   # ex. 192.0.2.0/24
+# pool <DHCP_START> - <DHCP_END>
+# routers + domain-name-servers = <BRIDGE_IP>
+sudo systemctl enable --now kea-dhcp4-server
+</code></pre>
+        <p>Le lab a aussi marché avec <strong>dnsmasq</strong> : <code>interface=vmbr0</code>, <code>dhcp-range=&lt;DHCP_START&gt;,&lt;DHCP_END&gt;</code>, <code>dhcp-option=option:router,&lt;BRIDGE_IP&gt;</code>. Kea ne corrige pas le routage : si <code>ip route get &lt;VM_DHCP_EX&gt;</code> sort par <code>eno1</code>, Offer jamais vu sur le pont.</p>
+<pre><code>tcpdump -n -i vmbr0 port 67 or port 68
+# Discover MAC VM, puis Offer depuis <BRIDGE_IP>
+</code></pre>
+      </section>
+
+      <section id="hub-env" class="section">
+        <h2>Hub — dépôts et environnements</h2>
+        <p>Le clone toolkit reste intact. Config et artefacts <strong>à côté</strong>, jamais dans le clone.</p>
+<pre><code>/opt/mojaloop/ml-deploymnt-toolkit/   # clone (orthographe du chemin lab)
+/opt/mojaloop/environments/ml-cc/
+/opt/mojaloop/environments/ml-test/
+/opt/mojaloop/artifacts/ml-cc/
+</code></pre>
+<pre><code>git clone &lt;url&gt; /opt/mojaloop/ml-deploymnt-toolkit
+git config --global --add safe.directory /opt/mojaloop/ml-deploymnt-toolkit
+cd /opt/mojaloop/ml-deploymnt-toolkit
+export DTK_DEV_ALLOW_UNTAGGED=1   # seulement hors tag de release
+</code></pre>
+
+        <h3><code>.env</code> (ne pas committer)</h3>
+<pre><code>PROXMOX_VE_ENDPOINT="https://<PVE_HOST>:8006"
+PROXMOX_VE_API_TOKEN="terraform-toolkit@pve!mojaloop-token=&lt;secret&gt;"
+PROXMOX_VE_SSH_USERNAME="root"
+PROXMOX_VE_SSH_PASSWORD='&lt;mot de passe root&gt;'
+PROXMOX_VE_INSECURE="true"
+CLOUDFLARE_API_TOKEN="&lt;token zone&gt;"
+OCI_REPO_USERNAME="&lt;github&gt;"
+OCI_REPO_PASSWORD="&lt;PAT read:packages&gt;"
+</code></pre>
+        <p>Guillemets simples si le mot de passe contient <code>$</code> ou <code>!</code>. <code>MINIO_ROOT_PASSWORD</code> / Harbor / Grafana : <strong>générés</strong> par Terraform — les poser dans <code>.env</code> les écrase. Après apply : <code>make secrets ENV=ml-cc</code>. MySQL / Mongo / Kratos inutiles sur un cluster <code>tooling</code>.</p>
+
+        <h3><code>config.yaml</code> (forme lab)</h3>
+<pre><code>version: 1
+cluster:
+  name: "ml-cc"
+  role: "tooling"
+  vip: "<CLUSTER_VIP>"
+  lb_ipam:
+    pools:
+      gw-int:
+        lan: "<GW_INT_LAN>"
+      gw-ext:
+        lan: "<GW_EXT_LAN>"
+        wan: "<WAF_WAN>"    # omis ⇒ DNS = lan
+template: "dev"
+infra:
+  provider: "proxmox"
+dns:
+  provider: "cloudflare"
+  domain: "<HUB_DOMAIN>"
+cert:
+  email: "ops@example.com"
+  server: "https://acme-v02.api.letsencrypt.org/directory"
+artifact:
+  url: "oci://ghcr.io/mojaloop/ml-deployment-toolkit"
+  version: "v0.19.0"
+registry:
+  enabled: false
+object_storage:
+  enabled: false
+observability:
+  enabled: false
+</code></pre>
+        <p><code>wan</code> = adresse que le bordure présente sur Internet (DNAT 1:1 ou reverse-proxy SNI). Cloudflare ne proxifie pas une IP privée (« reserved IP »).</p>
+        <div class="note">Le schéma officiel du toolkit peut nommer le rôle <code>cc</code>. Ce lab a validé <code>role: "tooling"</code> avec l’artefact <code>v0.19.0</code>. Ne pas mélanger sans relire le schéma du clone.</div>
+
+        <h3>Fichiers à côté</h3>
+        <p><code>placement.yaml</code> : groupe du template <code>dev</code> → nom <strong>exact</strong> du nœud Proxmox.</p>
+<pre><code># proxmox/proxmox.yaml
+version: 1
+network_bridge: "vmbr0"
+storage:
+  disks: "local"
+  images: "local"
+  snippets: "local"
+</code></pre>
+        <p><code>talos.yaml</code> : résolveur = IP pont (ici <code><BRIDGE_IP></code>). Kea/dnsmasq ne remplace pas cette valeur dans la machine config.</p>
+
+        <h3><code>ml-test</code></h3>
+        <ul class="check">
+          <li>Autre répertoire <code>environments/ml-test/</code>, <code>ENV=ml-test</code>.</li>
+          <li><code>cluster.name: ml-test</code>, VIP / <code>lan</code> libres.</li>
+          <li><code>dns.domain</code> <strong>différent</strong> (<code>test.<HUB_DOMAIN></code> ou autre zone).</li>
+          <li><code>gw-ext.wan</code> peut être la <strong>même</strong> IP publique. Interdit : deux external-dns <code>sync</code> sur les <em>mêmes noms</em>.</li>
+        </ul>
+        <p>Si <code>ml-cc</code> a effacé des records d’une instance déjà en service :</p>
+<pre><code>kubectl -n external-dns rollout restart deploy/external-dns-external-dns
+</code></pre>
+      </section>
+
+      <section id="hub-deploy" class="section">
+        <h2>Hub — déploiement Flux</h2>
+<pre><code>cd /opt/mojaloop/ml-deploymnt-toolkit
+export DTK_DEV_ALLOW_UNTAGGED=1
+make validate ENV=ml-cc
+make plan ENV=ml-cc
+make apply ENV=ml-cc
+</code></pre>
+        <p>Dans le plan : nœud Proxmox exact, disques <code>local</code>, VIP, <code>GW_EXT_DNS_TARGET</code> = <code>wan</code>.</p>
+        <p>Déroulement : secrets Talos → snippets → image <code>talos-v1.13.7</code> → VM → bootstrap etcd → kubeconfig → Flux → Kustomizations. Le premier Helm <code>flux-operator</code> peut expirer (pull lent, taint control-plane) alors que le pod est Running : <code>make plan &amp;&amp; make apply</code> une seconde fois. Ne pas relancer <code>make apply</code> seul (plan périmé).</p>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig
+flux get kustomizations -A
+kubectl get pods -A
+</code></pre>
+        <p>Ordre Flux : <code>platform</code> → <code>dns</code> → <code>platform-config</code> → <code>talos</code> → <code>tooling</code> → <code>tooling-config</code> → routes / observabilité. <code>READY False</code> + <code>dependency … is not ready</code> = attente normale.</p>
+        <p>Console Talos : IPv4 dans le pool DHCP, GW pont, <code>CONNECTIVITY OK</code>. <code>STAGE: Booting</code> tant que Terraform n’a pas lancé <code>talosctl bootstrap</code>.</p>
+        <p>Destruction : <code>make destroy-fast ENV=ml-cc</code> en root depuis le clone. Si l’API est morte, retirer à la main les records Cloudflare <em>de ce</em> cluster seulement.</p>
+      </section>
+
+      <section id="hub-dns" class="section">
+        <h2>Hub — DNS, interfaces, pannes</h2>
+        <ol class="steps">
+          <li>Zone déléguée au provider DNS (lab : Cloudflare <code><HUB_DOMAIN></code>).</li>
+          <li>Jeton édition DNS dans <code>CLOUDFLARE_API_TOKEN</code>.</li>
+          <li>Ne pas réutiliser les noms d’un autre cluster.</li>
+        </ol>
+        <p>external-dns crée un A (+ TXT <code>a-&lt;nom&gt;</code>) <strong>par HTTPRoute</strong>. Annotation Gateway seule ≠ record. <code>policy: sync</code> supprime un nom qui disparaît des routes.</p>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig
+kubectl -n platform-system get gateway gw-ext -o yaml | grep target
+kubectl -n platform-system get gateway gw-int -o yaml | grep target
+kubectl -n external-dns logs deploy/external-dns-external-dns --tail=40
+# gw-ext → <WAF_WAN>   gw-int → <GW_INT_LAN>
+</code></pre>
+
+        <h3>Interfaces (HTTPRoutes prêtes)</h3>
+        <table>
+          <tr><th>Noms</th><th>Gateway</th><th>DNS lab</th></tr>
+          <tr><td><code>grafana.int</code>, <code>harbor.int</code>, <code>minio.int</code>, <code>vault.int</code>, <code>s3.int</code></td><td><code>gw-int</code></td><td><code><GW_INT_LAN></code></td></tr>
+          <tr><td><code>loki.ext</code>, <code>tempo.ext</code>, <code>thanos.ext</code></td><td><code>gw-ext</code></td><td><code><WAF_WAN></code></td></tr>
+        </table>
+        <p>Mots de passe : <code>make secrets ENV=ml-cc</code> (Grafana / Harbor <code>admin</code>, MinIO <code>minioadmin</code>).</p>
+
+        <h3>Override MinIO (image quay.io 401)</h3>
+        <p><code>quay.io/minio/minio</code> communautaire retirée → <code>tooling-config</code> bloqué, Harbor aussi. Fichier d’environnement, pas un fork : <code>environments/ml-cc/values/minio/minio.yaml</code></p>
+<pre><code>image:
+  repository: cgr.dev/chainguard/minio
+  tag: latest
+mcImage:
+  repository: cgr.dev/chainguard/minio-client
+  tag: latest-dev
+securityContext:
+  enabled: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+</code></pre>
+<pre><code>make apply-config ENV=ml-cc
+</code></pre>
+        <p><code>latest-dev</code> sur le client : le Job <code>minio-post-job</code> appelle <code>/bin/sh</code> (absent de l’image distroless).</p>
+
+        <h3>Pannes rencontrées</h3>
+        <table>
+          <tr><th>Symptôme</th><th>Cause</th><th>Action</th></tr>
+          <tr><td><code>Datastore.Allocate</code> 403</td><td>Jeton sans droit storage</td><td>ACL admin ou <code>PVEDatastoreAdmin</code> sur <code>/storage/local</code></td></tr>
+          <tr><td>SSH <code>Permission denied</code> <code>[none password]</code></td><td>MDP ou <code>AllowGroups</code></td><td><code>usermod -aG mojaloop root</code></td></tr>
+          <tr><td><code>ipcc_send_rec</code></td><td>SSH non root</td><td><code>PROXMOX_VE_SSH_USERNAME=root</code></td></tr>
+          <tr><td>Discover sans Offer</td><td>Route /24 via NIC</td><td>Routes <code>/32</code> via pont</td></tr>
+          <tr><td>NTP / discovery timeout, IP OK</td><td>SNAT mauvais préfixe</td><td>FORWARD + <code>iprange</code></td></tr>
+          <tr><td><code>index()</code> liste vide</td><td>Pas d’IPv4 <code>eth0</code></td><td>DHCP d’abord, puis <code>plan &amp;&amp; apply</code></td></tr>
+          <tr><td><code>variable not set: domain</code></td><td>Artefact OCI vs ConfigMap <code>DOMAIN</code></td><td>Artefact du même commit que le clone</td></tr>
+          <tr><td>MinIO 401 quay.io</td><td>Image retirée</td><td>Override Chainguard</td></tr>
+          <tr><td>external-dns efface la zone</td><td><code>sync</code> + même zone</td><td>Zone dédiée ; restart l’autre instance</td></tr>
+          <tr><td><code>destroy</code> <code>no route to host</code> VIP</td><td>VM déjà coupée</td><td><code>state rm</code> K8s puis destroy</td></tr>
+          <tr><td>VM déjà <code>qm destroy</code></td><td>State vs <code>100.conf</code></td><td><code>terraform state rm</code> VM, <code>destroy-fast</code></td></tr>
+        </table>
+
+        <h3>Checklist</h3>
+        <ul class="check">
+          <li><code>ip route get <VM_DHCP_EX></code> → <code>dev vmbr0</code></li>
+          <li>DHCP : pool, routeur et DNS pont ; VIP et LB exclus</li>
+          <li>SNAT VM → IP NIC ; FORWARD pont ↔ NIC</li>
+          <li>Stockage <code>local</code> : snippets + images</li>
+          <li>SSH root dans le groupe autorisé ; un seul user Terraform</li>
+          <li><code>wan</code> = IP publique ; <code>dns.domain</code> libre</li>
+          <li><code>placement.yaml</code> = nom de nœud exact</li>
+          <li>Annotation <code>gw-ext</code> = public, <code>gw-int</code> = LAN</li>
+          <li><code>ml-test</code> : autres IP, autre nom DNS</li>
+        </ul>
       </section>
 
       <section id="workflow" class="section">
@@ -212,7 +525,6 @@
         <p>Le Hub doit déjà répondre. Sinon l’agent restera bloqué (CA, clés JWS ou certificats serveur du Hub absents).</p>
 <pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.openmfi.org/pm4mlapi/health
 # attendu : 200
-
 curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
   -d 'grant_type=client_credentials' -d 'client_id=banque-test' -d 'client_secret=LE_SECRET_LIGNE_B'
 # attendu : un JSON avec access_token, pas une page HTML « Route not found »
@@ -589,7 +901,7 @@ docker logs mcm-agent-&lt;fspid&gt; --tail 20
         <ul class="check">
           <li><code>Sealed false</code> sur chaque <code>sdk-vault-&lt;fspid&gt;</code> utile.</li>
           <li><code>mcm-agent-&lt;fspid&gt;</code> healthy ; websocket <code>:4004</code> OK pour le SDK.</li>
-          <li>SDK 1:1 ou overlay : pas de restart agent en boucle.</li>
+          <li>SDK 1:1 ou 1:N : pas de restart agent en boucle.</li>
         </ul>
 
         <h3>Si vault-init échoue</h3>
@@ -603,510 +915,6 @@ docker logs mcm-agent-&lt;fspid&gt; --tail 20
         <div class="ctx">
           <strong>Hub (ml-test) ≠ Vault DFSP</strong>
           Le Vault Raft du switch (<code>vault-0</code>…, unseal 5/3) est documenté sous <a href="#risques-ops">Runbook overlay</a>. Ici : uniquement les Vaults Compose du nœud SDK.
-        </div>
-      </section>
-
-      <section id="hub" class="section">
-        <h2>Hub — architecture Control Center</h2>
-        <p>Le switch se déploie en IaC (Terraform + Talos + Flux) depuis le toolkit. Deux clusters distincts :</p>
-        <table>
-          <tr><th>Cluster</th><th>Rôle</th><th>Contenu</th></tr>
-          <tr><td><code>ml-cc</code></td><td>Control Center (<code>tooling</code>)</td><td>Harbor, MinIO, Vault, observabilité</td></tr>
-          <tr><td><code>ml-test</code></td><td>Cluster de test / switch</td><td>Même outil, autre répertoire d’environnement, <strong>autre zone DNS</strong></td></tr>
-        </table>
-        <p>Les deux ne doivent <strong>pas</strong> publier les mêmes noms dans la même zone : external-dns est en <code>policy: sync</code> et <em>efface</em> les enregistrements qu’il ne gère plus.</p>
-        <p>Cible DNS publique : l’annotation <code>external-dns.alpha.kubernetes.io/target</code> est la seule valeur envoyée au DNS. Cilium reste privé. <code>*.int</code> → IP LAN du gateway interne. <code>*.ext</code> de <em>ce</em> cluster → <code>wan</code> (IP de bordure).</p>
-        <p>Guide générique toolkit : <code>docs/adopter/deployment-cc.md</code>. Source lab : <code>docs/adopter/deployment-cc-lab-openmfi.md</code>. Nested Sonatel→Proxmox→Talos et I/O etcd : <a href="#risques-infra">risques infra</a>.</p>
-        <div class="ctx">
-          <strong>Contexte actuel — lab (zone <HUB_DOMAIN>) (validé)</strong>
-          <table>
-            <tr><th>Objet</th><th>Adresse cluster</th><th>Cible DNS</th></tr>
-            <tr><td><code>gw-int</code></td><td><code><GW_INT_LAN></code></td><td><code><GW_INT_LAN></code> (pas de <code>wan</code>)</td></tr>
-            <tr><td><code>gw-ext</code></td><td><code><GW_EXT_LAN></code></td><td><code>wan</code> : d’abord <code><PVE_HOST></code>, puis public <code><WAF_WAN></code></td></tr>
-          </table>
-          <p>Kustomizations Ready : <code>platform</code>, <code>dns</code>, <code>platform-config</code>, <code>talos</code>, <code>tooling</code>, <code>tooling-config</code>, <code>tooling-observability</code>, <code>tooling-observability-routes</code>, <code>tooling-routes</code>.</p>
-        </div>
-      </section>
-
-      <section id="hub-net" class="section">
-        <h2>Hub — réseau, DHCP, NAT</h2>
-        <p>Point qui bloque le plus souvent le premier boot Talos. Principe générique : si l’hôte a <strong>deux interfaces dans le même /24</strong> (NIC physique + pont VM), le noyau répond DHCP et route vers les VM par la NIC. La VM, branchée seulement sur le pont, ne voit rien.</p>
-        <p>Symptôme Talos : <code>IP</code> vide, <code>CONNECTIVITY FAILED</code>, <code>STAGE: Booting</code>, Discover DHCP sans Offer.</p>
-        <p>Cible propre : une seule adresse du LAN sur le pont, NIC physique en port du pont. Contournement : routes hôte <code>/32</code> vers le pont + SNAT.</p>
-
-        <div class="ctx">
-          <strong>Contexte actuel — hôte Proxmox <code>monproxmox</code></strong>
-          <table>
-            <tr><th>Interface</th><th>Adresse</th><th>Rôle</th></tr>
-            <tr><td><code>eno1</code></td><td><code><PVE_HOST>/24</code></td><td>LAN physique, GW <code><LAN_GW></code>, SSH, Internet</td></tr>
-            <tr><td><code>vmbr0</code></td><td><code><BRIDGE_IP>/24</code></td><td>Pont Talos, aucune NIC esclave</td></tr>
-            <tr><td><code>tailscale0</code></td><td><code><TAILSCALE_IP>/32</code></td><td>Admin</td></tr>
-          </table>
-          <p>Plan <code>ml-cc</code> (exclure du DHCP : GW physique, hôte, VIP, LB) :</p>
-          <table>
-            <tr><th>Adresse</th><th>Usage</th></tr>
-            <tr><td><code><LAN_GW></code></td><td>Passerelle LAN physique</td></tr>
-            <tr><td><code><PVE_HOST></code></td><td>Hôte <code>eno1</code></td></tr>
-            <tr><td><code><BRIDGE_IP></code></td><td>Hôte pont : GW / DNS / DHCP des VM</td></tr>
-            <tr><td><code><CLUSTER_VIP></code></td><td><code>cluster.vip</code> (API K8s)</td></tr>
-            <tr><td><code>&lt;GW_INT_LAN&gt;</code> / <code>&lt;GW_EXT_LAN&gt;</code></td><td><code>gw-int.lan</code> / <code>gw-ext.lan</code></td></tr>
-            <tr><td><code>&lt;DHCP_START&gt;</code>–<code>&lt;DHCP_END&gt;</code></td><td>Pool DHCP</td></tr>
-            <tr><td><code><WAF_WAN></code></td><td><code>gw-ext.wan</code></td></tr>
-          </table>
-          <p><code>ml-test</code> : autre VIP et autre LB-IPAM, sans recouvrir les adresses de <code>ml-cc</code>.</p>
-        </div>
-
-        <h3>Routes et NAT (avant le premier boot Talos)</h3>
-        <p>Session console Proxmox ou Tailscale — pas seulement SSH sur l’IP <code>eno1</code> (le NAT peut vous couper).</p>
-<pre><code># Exemple fictif : LAN_PREFIX=192.0.2  DHCP 50–90  BRIDGE_IP=192.0.2.1
-LAN_PREFIX=192.0.2
-for i in $(seq 50 90); do
-  ip route replace ${LAN_PREFIX}.$i/32 dev vmbr0 src &lt;BRIDGE_IP&gt;
-done
-ip route replace <CLUSTER_VIP>/32 dev vmbr0 src <BRIDGE_IP>
-ip route replace <GW_INT_LAN>/32 dev vmbr0 src <BRIDGE_IP>
-ip route replace <GW_EXT_LAN>/32 dev vmbr0 src <BRIDGE_IP>
-
-sysctl -w net.ipv4.ip_forward=1
-sysctl -w net.ipv4.conf.all.rp_filter=0
-sysctl -w net.ipv4.conf.vmbr0.rp_filter=0
-sysctl -w net.ipv4.conf.eno1.rp_filter=0
-
-iptables -I FORWARD 1 -i vmbr0 -o eno1 -j ACCEPT
-iptables -I FORWARD 1 -i eno1 -o vmbr0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -t nat -I POSTROUTING 1 -m iprange --src-range <DHCP_START>-<DHCP_END> \
-  -o eno1 -j SNAT --to-source <PVE_HOST>
-iptables -I INPUT -i vmbr0 -p udp --dport 53 -j ACCEPT
-iptables -I INPUT -i vmbr0 -p udp --dport 67 -j ACCEPT
-
-ip route get <VM_DHCP_EX>
-# attendu : dev vmbr0 src <BRIDGE_IP>
-</code></pre>
-        <div class="warn">Ne pas NAT un préfixe trop large (<code>/27</code> mal aligné) : il peut <strong>exclure</strong> des adresses du pool. Utiliser <code>/32</code> ou <code>iprange</code>. Ces règles disparaissent au reboot hôte.</div>
-        <p>Contrôle : <code>tcpdump -n -i eno1 host 1.1.1.1</code> pendant un ping VM → source <code>&lt;PVE_HOST&gt;</code>, pas l’IP de la VM.</p>
-
-        <h3>DHCP (Kea ou dnsmasq)</h3>
-        <p>Écoute sur le pont. Passerelle annoncée = IP de l’hôte <strong>sur le pont</strong>, pas la GW du LAN physique (injoignable depuis le pont isolé).</p>
-<pre><code>sudo apt update &amp;&amp; sudo apt install -y kea-dhcp4-server
-# /etc/kea/kea-dhcp4.conf — interfaces: vmbr0
-# subnet <LAN_CIDR>   # ex. 192.0.2.0/24
-# pool <DHCP_START> - <DHCP_END>
-# routers + domain-name-servers = <BRIDGE_IP>
-sudo systemctl enable --now kea-dhcp4-server
-</code></pre>
-        <p>Le lab a aussi marché avec <strong>dnsmasq</strong> : <code>interface=vmbr0</code>, <code>dhcp-range=&lt;DHCP_START&gt;,&lt;DHCP_END&gt;</code>, <code>dhcp-option=option:router,&lt;BRIDGE_IP&gt;</code>. Kea ne corrige pas le routage : si <code>ip route get &lt;VM_DHCP_EX&gt;</code> sort par <code>eno1</code>, Offer jamais vu sur le pont.</p>
-<pre><code>tcpdump -n -i vmbr0 port 67 or port 68
-# Discover MAC VM, puis Offer depuis <BRIDGE_IP>
-</code></pre>
-      </section>
-
-      <section id="hub-prereq" class="section">
-        <h2>Hub — prérequis hôte et Proxmox</h2>
-        <p>From scratch sur l’hôte d’IaC, <strong>en root</strong>, avant <code>make apply</code>. Même utilisateur Unix pour <code>plan</code> et <code>apply</code> (lock <code>/tmp/terraform-provider-proxmox-id-gen.lock</code>).</p>
-        <table>
-          <tr><th>Outil</th><th>Rôle</th></tr>
-          <tr><td>Terraform ≥ 1.6</td><td>VM, Talos, Flux</td></tr>
-          <tr><td>make, yq <strong>mikefarah v4</strong>, jq, python3</td><td>Makefile / schéma (pas le yq Python)</td></tr>
-          <tr><td>flux CLI, kubectl, talosctl</td><td>talosctl aligné Talos v1.13.7</td></tr>
-          <tr><td>sshpass</td><td>Test mot de passe SSH provider seulement</td></tr>
-        </table>
-<pre><code>sudo apt update &amp;&amp; sudo apt install -y wget gnupg lsb-release curl jq python3 make unzip
-
-wget -O- https://apt.releases.hashicorp.com/gpg \
-  | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
-  | sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update &amp;&amp; sudo apt install -y terraform
-terraform version
-
-curl -s https://fluxcd.io/install.sh | sudo bash
-curl -sL https://talos.dev/install | sh
-curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-</code></pre>
-
-        <h3>Proxmox</h3>
-        <div class="ctx">
-          <strong>Contexte actuel</strong> — nœud <code>monproxmox</code>, UI <code>https://<PVE_HOST>:8006</code>, datastore <code>local</code> (pas de <code>local-lvm</code>).
-        </div>
-<pre><code>pvesm set local --content iso,vztmpl,backup,snippets,images,rootdir
-
-pveum user token add terraform-toolkit@pve 'mojaloop-token' --privsep 0
-pveum aclmod / -user terraform-toolkit@pve -role Administrator
-</code></pre>
-        <p>Le provider importe disques / snippets en <strong>SSH mot de passe</strong> (<code>agent = false</code>), utilisateur capable de <code>qm</code> (root). Si <code>sshd</code> a <code>AllowGroups mojaloop</code> :</p>
-<pre><code>usermod -aG mojaloop root
-sshd -T | grep allowgroups
-getent group mojaloop
-</code></pre>
-      </section>
-
-      <section id="hub-env" class="section">
-        <h2>Hub — dépôts et environnements</h2>
-        <p>Le clone toolkit reste intact. Config et artefacts <strong>à côté</strong>, jamais dans le clone.</p>
-<pre><code>/opt/mojaloop/ml-deploymnt-toolkit/   # clone (orthographe du chemin lab)
-/opt/mojaloop/environments/ml-cc/
-/opt/mojaloop/environments/ml-test/
-/opt/mojaloop/artifacts/ml-cc/
-</code></pre>
-<pre><code>git clone &lt;url&gt; /opt/mojaloop/ml-deploymnt-toolkit
-git config --global --add safe.directory /opt/mojaloop/ml-deploymnt-toolkit
-cd /opt/mojaloop/ml-deploymnt-toolkit
-export DTK_DEV_ALLOW_UNTAGGED=1   # seulement hors tag de release
-</code></pre>
-
-        <h3><code>.env</code> (ne pas committer)</h3>
-<pre><code>PROXMOX_VE_ENDPOINT="https://<PVE_HOST>:8006"
-PROXMOX_VE_API_TOKEN="terraform-toolkit@pve!mojaloop-token=&lt;secret&gt;"
-PROXMOX_VE_SSH_USERNAME="root"
-PROXMOX_VE_SSH_PASSWORD='&lt;mot de passe root&gt;'
-PROXMOX_VE_INSECURE="true"
-CLOUDFLARE_API_TOKEN="&lt;token zone&gt;"
-OCI_REPO_USERNAME="&lt;github&gt;"
-OCI_REPO_PASSWORD="&lt;PAT read:packages&gt;"
-</code></pre>
-        <p>Guillemets simples si le mot de passe contient <code>$</code> ou <code>!</code>. <code>MINIO_ROOT_PASSWORD</code> / Harbor / Grafana : <strong>générés</strong> par Terraform — les poser dans <code>.env</code> les écrase. Après apply : <code>make secrets ENV=ml-cc</code>. MySQL / Mongo / Kratos inutiles sur un cluster <code>tooling</code>.</p>
-
-        <h3><code>config.yaml</code> (forme lab)</h3>
-<pre><code>version: 1
-cluster:
-  name: "ml-cc"
-  role: "tooling"
-  vip: "<CLUSTER_VIP>"
-  lb_ipam:
-    pools:
-      gw-int:
-        lan: "<GW_INT_LAN>"
-      gw-ext:
-        lan: "<GW_EXT_LAN>"
-        wan: "<WAF_WAN>"    # omis ⇒ DNS = lan
-template: "dev"
-infra:
-  provider: "proxmox"
-dns:
-  provider: "cloudflare"
-  domain: "<HUB_DOMAIN>"
-cert:
-  email: "ops@example.com"
-  server: "https://acme-v02.api.letsencrypt.org/directory"
-artifact:
-  url: "oci://ghcr.io/mojaloop/ml-deployment-toolkit"
-  version: "v0.19.0"
-registry:
-  enabled: false
-object_storage:
-  enabled: false
-observability:
-  enabled: false
-</code></pre>
-        <p><code>wan</code> = adresse que le bordure présente sur Internet (DNAT 1:1 ou reverse-proxy SNI). Cloudflare ne proxifie pas une IP privée (« reserved IP »).</p>
-        <div class="note">Le schéma officiel du toolkit peut nommer le rôle <code>cc</code>. Ce lab a validé <code>role: "tooling"</code> avec l’artefact <code>v0.19.0</code>. Ne pas mélanger sans relire le schéma du clone.</div>
-
-        <h3>Fichiers à côté</h3>
-        <p><code>placement.yaml</code> : groupe du template <code>dev</code> → nom <strong>exact</strong> du nœud Proxmox.</p>
-<pre><code># proxmox/proxmox.yaml
-version: 1
-network_bridge: "vmbr0"
-storage:
-  disks: "local"
-  images: "local"
-  snippets: "local"
-</code></pre>
-        <p><code>talos.yaml</code> : résolveur = IP pont (ici <code><BRIDGE_IP></code>). Kea/dnsmasq ne remplace pas cette valeur dans la machine config.</p>
-
-        <h3><code>ml-test</code></h3>
-        <ul class="check">
-          <li>Autre répertoire <code>environments/ml-test/</code>, <code>ENV=ml-test</code>.</li>
-          <li><code>cluster.name: ml-test</code>, VIP / <code>lan</code> libres.</li>
-          <li><code>dns.domain</code> <strong>différent</strong> (<code>test.<HUB_DOMAIN></code> ou autre zone).</li>
-          <li><code>gw-ext.wan</code> peut être la <strong>même</strong> IP publique. Interdit : deux external-dns <code>sync</code> sur les <em>mêmes noms</em>.</li>
-        </ul>
-        <p>Si <code>ml-cc</code> a effacé des records d’une instance déjà en service :</p>
-<pre><code>kubectl -n external-dns rollout restart deploy/external-dns-external-dns
-</code></pre>
-      </section>
-
-      <section id="hub-deploy" class="section">
-        <h2>Hub — déploiement Flux</h2>
-<pre><code>cd /opt/mojaloop/ml-deploymnt-toolkit
-export DTK_DEV_ALLOW_UNTAGGED=1
-make validate ENV=ml-cc
-make plan ENV=ml-cc
-make apply ENV=ml-cc
-</code></pre>
-        <p>Dans le plan : nœud Proxmox exact, disques <code>local</code>, VIP, <code>GW_EXT_DNS_TARGET</code> = <code>wan</code>.</p>
-        <p>Déroulement : secrets Talos → snippets → image <code>talos-v1.13.7</code> → VM → bootstrap etcd → kubeconfig → Flux → Kustomizations. Le premier Helm <code>flux-operator</code> peut expirer (pull lent, taint control-plane) alors que le pod est Running : <code>make plan &amp;&amp; make apply</code> une seconde fois. Ne pas relancer <code>make apply</code> seul (plan périmé).</p>
-<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig
-flux get kustomizations -A
-kubectl get pods -A
-</code></pre>
-        <p>Ordre Flux : <code>platform</code> → <code>dns</code> → <code>platform-config</code> → <code>talos</code> → <code>tooling</code> → <code>tooling-config</code> → routes / observabilité. <code>READY False</code> + <code>dependency … is not ready</code> = attente normale.</p>
-        <p>Console Talos : IPv4 dans le pool DHCP, GW pont, <code>CONNECTIVITY OK</code>. <code>STAGE: Booting</code> tant que Terraform n’a pas lancé <code>talosctl bootstrap</code>.</p>
-        <p>Destruction : <code>make destroy-fast ENV=ml-cc</code> en root depuis le clone. Si l’API est morte, retirer à la main les records Cloudflare <em>de ce</em> cluster seulement.</p>
-      </section>
-
-      <section id="hub-dns" class="section">
-        <h2>Hub — DNS, interfaces, pannes</h2>
-        <ol class="steps">
-          <li>Zone déléguée au provider DNS (lab : Cloudflare <code><HUB_DOMAIN></code>).</li>
-          <li>Jeton édition DNS dans <code>CLOUDFLARE_API_TOKEN</code>.</li>
-          <li>Ne pas réutiliser les noms d’un autre cluster.</li>
-        </ol>
-        <p>external-dns crée un A (+ TXT <code>a-&lt;nom&gt;</code>) <strong>par HTTPRoute</strong>. Annotation Gateway seule ≠ record. <code>policy: sync</code> supprime un nom qui disparaît des routes.</p>
-<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig
-kubectl -n platform-system get gateway gw-ext -o yaml | grep target
-kubectl -n platform-system get gateway gw-int -o yaml | grep target
-kubectl -n external-dns logs deploy/external-dns-external-dns --tail=40
-# gw-ext → <WAF_WAN>   gw-int → <GW_INT_LAN>
-</code></pre>
-
-        <h3>Interfaces (HTTPRoutes prêtes)</h3>
-        <table>
-          <tr><th>Noms</th><th>Gateway</th><th>DNS lab</th></tr>
-          <tr><td><code>grafana.int</code>, <code>harbor.int</code>, <code>minio.int</code>, <code>vault.int</code>, <code>s3.int</code></td><td><code>gw-int</code></td><td><code><GW_INT_LAN></code></td></tr>
-          <tr><td><code>loki.ext</code>, <code>tempo.ext</code>, <code>thanos.ext</code></td><td><code>gw-ext</code></td><td><code><WAF_WAN></code></td></tr>
-        </table>
-        <p>Mots de passe : <code>make secrets ENV=ml-cc</code> (Grafana / Harbor <code>admin</code>, MinIO <code>minioadmin</code>).</p>
-
-        <h3>Override MinIO (image quay.io 401)</h3>
-        <p><code>quay.io/minio/minio</code> communautaire retirée → <code>tooling-config</code> bloqué, Harbor aussi. Fichier d’environnement, pas un fork : <code>environments/ml-cc/values/minio/minio.yaml</code></p>
-<pre><code>image:
-  repository: cgr.dev/chainguard/minio
-  tag: latest
-mcImage:
-  repository: cgr.dev/chainguard/minio-client
-  tag: latest-dev
-securityContext:
-  enabled: true
-  runAsUser: 65532
-  runAsGroup: 65532
-  fsGroup: 65532
-</code></pre>
-<pre><code>make apply-config ENV=ml-cc
-</code></pre>
-        <p><code>latest-dev</code> sur le client : le Job <code>minio-post-job</code> appelle <code>/bin/sh</code> (absent de l’image distroless).</p>
-
-        <h3>Pannes rencontrées</h3>
-        <table>
-          <tr><th>Symptôme</th><th>Cause</th><th>Action</th></tr>
-          <tr><td><code>Datastore.Allocate</code> 403</td><td>Jeton sans droit storage</td><td>ACL admin ou <code>PVEDatastoreAdmin</code> sur <code>/storage/local</code></td></tr>
-          <tr><td>SSH <code>Permission denied</code> <code>[none password]</code></td><td>MDP ou <code>AllowGroups</code></td><td><code>usermod -aG mojaloop root</code></td></tr>
-          <tr><td><code>ipcc_send_rec</code></td><td>SSH non root</td><td><code>PROXMOX_VE_SSH_USERNAME=root</code></td></tr>
-          <tr><td>Discover sans Offer</td><td>Route /24 via NIC</td><td>Routes <code>/32</code> via pont</td></tr>
-          <tr><td>NTP / discovery timeout, IP OK</td><td>SNAT mauvais préfixe</td><td>FORWARD + <code>iprange</code></td></tr>
-          <tr><td><code>index()</code> liste vide</td><td>Pas d’IPv4 <code>eth0</code></td><td>DHCP d’abord, puis <code>plan &amp;&amp; apply</code></td></tr>
-          <tr><td><code>variable not set: domain</code></td><td>Artefact OCI vs ConfigMap <code>DOMAIN</code></td><td>Artefact du même commit que le clone</td></tr>
-          <tr><td>MinIO 401 quay.io</td><td>Image retirée</td><td>Override Chainguard</td></tr>
-          <tr><td>external-dns efface la zone</td><td><code>sync</code> + même zone</td><td>Zone dédiée ; restart l’autre instance</td></tr>
-          <tr><td><code>destroy</code> <code>no route to host</code> VIP</td><td>VM déjà coupée</td><td><code>state rm</code> K8s puis destroy</td></tr>
-          <tr><td>VM déjà <code>qm destroy</code></td><td>State vs <code>100.conf</code></td><td><code>terraform state rm</code> VM, <code>destroy-fast</code></td></tr>
-        </table>
-
-        <h3>Checklist</h3>
-        <ul class="check">
-          <li><code>ip route get <VM_DHCP_EX></code> → <code>dev vmbr0</code></li>
-          <li>DHCP : pool, routeur et DNS pont ; VIP et LB exclus</li>
-          <li>SNAT VM → IP NIC ; FORWARD pont ↔ NIC</li>
-          <li>Stockage <code>local</code> : snippets + images</li>
-          <li>SSH root dans le groupe autorisé ; un seul user Terraform</li>
-          <li><code>wan</code> = IP publique ; <code>dns.domain</code> libre</li>
-          <li><code>placement.yaml</code> = nom de nœud exact</li>
-          <li>Annotation <code>gw-ext</code> = public, <code>gw-int</code> = LAN</li>
-          <li><code>ml-test</code> : autres IP, autre nom DNS</li>
-        </ul>
-      </section>
-
-      <section id="hub-purge" class="section">
-        <div class="badges">
-          <span class="badge high">irréversible</span>
-          <span class="badge">dry-run par défaut</span>
-          <span class="badge">--reset</span>
-          <span class="badge">--since / --until</span>
-        </div>
-        <h2>Hub — purge, réinit ou période</h2>
-        <p class="lead">Script <code>scripts/hub/mojaloop-purge-dfsp.sh</code> : <strong>purge</strong> (retrait du participant), <code>--reset</code> (réinit ledger complète), ou <code>--reset --since/--until</code> (fenêtre temporelle). Ni SDK, ni MCM / Hydra / Vault. Markdown : <code>docs/adopter/mojaloop-purge-dfsp.md</code>.</p>
-        <div class="warn">
-          <strong>Dry-run d’abord</strong>
-          Sans <code>--execute</code>, tout passe dans une transaction MySQL puis <code>ROLLBACK</code>. Le Hub (<code>participantId</code> 1) est protégé. Confirmation : <code>SUPPRIMER</code> (purge) ou <code>REINITIALISER</code> (<code>--reset</code>).
-        </div>
-        <h3>Purge vs <code>--reset</code> vs période</h3>
-        <table>
-          <tr><th></th><th>Purge (défaut)</th><th><code>--reset</code></th><th><code>--reset --since/--until</code></th></tr>
-          <tr><td>Participant, comptes, limites, endpoints, tokens</td><td>supprimés</td><td><strong>conservés</strong></td><td><strong>conservés</strong></td></tr>
-          <tr><td>Transferts / quotes / settlements</td><td>tous</td><td>tous</td><td>seulement <code>createdDate</code> ∈ <code>[since, until)</code></td></tr>
-          <tr><td>Positions</td><td>lignes supprimées</td><td><code>value</code> / <code>reservedValue</code> → <strong>0</strong></td><td><strong>delta</strong> des mouvements retirés (Hub + DFSP)</td></tr>
-          <tr><td>Oracle MSISDN / ALIAS</td><td>supprimés</td><td>supprimés</td><td><strong>intactes</strong> (forcé)</td></tr>
-          <tr><td>MCM / Hydra / Vault</td><td>inchangés</td><td>inchangés</td><td>inchangés</td></tr>
-          <tr><td>Confirmation <code>--execute</code></td><td><code>SUPPRIMER</code></td><td><code>REINITIALISER</code></td><td><code>REINITIALISER</code></td></tr>
-        </table>
-        <h3>Réinit périodique (<code>--since</code> / <code>--until</code>)</h3>
-        <p>Uniquement avec <code>--reset</code>. Intervalle <strong>demi-ouvert</strong> <code>[since, until)</code> sur <code>createdDate</code> (transferts, bulk, FX, quotes, settlements, mouvements de position). Formats : <code>YYYY-MM-DD</code> ou <code>YYYY-MM-DD HH:MM:SS</code> (le <code>T</code> / <code>Z</code> ISO sont acceptés).</p>
-        <ul class="check">
-          <li>Pas de remise à zéro globale des positions — uniquement l’inverse du delta des écritures de la fenêtre.</li>
-          <li>Oracles non touchés (équivalent automatique de <code>--skip-oracle</code>).</li>
-          <li><strong>Sans liste de DFSP</strong> : découverte automatique de tous les <code>participant.name</code> hors Hub (évite d’en oublier).</li>
-          <li>Les fenêtres <code>settlementWindow</code> ne sont pas recréées : vérifier qu’il reste une fenêtre <code>OPEN</code> après coup.</li>
-        </ul>
-        <h3>Ce qui est touché (stores)</h3>
-        <table>
-          <tr><th>Store</th><th>Périmètre</th></tr>
-          <tr><td><code>central_ledger</code></td><td>Selon le mode ci-dessus</td></tr>
-          <tr><td>Oracles</td><td><code>oracle_msisdn</code>, <code>oracle_alias</code> (sauf <code>--skip-oracle</code> ou mode période)</td></tr>
-          <tr><td>Redis <code>--redis</code></td><td>Clés <code>ttk-redis</code> contenant le nom du DFSP</td></tr>
-          <tr><td>Mongo <code>--mongo-purge</code></td><td>Vidage <strong>global</strong> de <code>mlos</code>, <code>ttk</code>, <code>reporting_events</code></td></tr>
-          <tr><td>Kafka <code>--kafka-purge</code></td><td>Topics Strimzi <code>^topic-</code> (pas par DFSP)</td></tr>
-        </table>
-        <p>Cible lab : namespace <code>mojaloop</code> (Deployments), <code>data</code> (PXC <code>mojaloop-db-pxc-0</code> / conteneur <code>pxc</code>). Mot de passe root : secret <code>data/mojaloop-db-secrets</code>, clé <code>root</code>. Chart Mojaloop 17.2.0 / central-ledger v19.12.7.</p>
-        <h3>Prérequis</h3>
-<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
-# pas le kubeconfig ml-cc (artefacts New2 : …/artifacts/ml-test/kubernetes/kubeconfig)
-chmod +x scripts/hub/mojaloop-purge-dfsp.sh
-</code></pre>
-        <h3>Santé etcd (avant dry-run et avant <code>--execute</code>)</h3>
-        <p>Un <code>kubectl exec</code> coupé (VIP / etcd) produit <code>Base central_ledger introuvable</code> ou un <em>Périmètre</em> vide. Ne pas COMMIT tant que etcd n’est pas <code>ok</code>.</p>
-<pre><code>kubectl get --raw=/healthz/etcd
-# attendu : ok
-# si « etcd failed » : attendre, ne pas --execute
-</code></pre>
-        <h3>Lister les DFSP (noms ledger)</h3>
-        <p>Utiliser exactement <code>participant.name</code> (pas le FQDN). Le Hub (<code>id</code> 1) ne se passe pas au script.</p>
-<pre><code>PASS=$(kubectl -n data get secret mojaloop-db-secrets -o jsonpath='{.data.root}' | base64 -d)
-kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
-  env MYSQL_PWD="$PASS" mysql -uroot -N -B -e \
-  "SELECT participantId, name, isActive FROM central_ledger.participant ORDER BY participantId;"
-</code></pre>
-        <h3>Commandes</h3>
-<pre><code># Simulation purge (défaut) + SQL de relecture
-./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql &lt;fspid&gt;
-
-# Réinit complète (DFSP conservé) — dry-run
-./scripts/hub/mojaloop-purge-dfsp.sh --reset --sql-out /tmp/reset-dry.sql &lt;fspid&gt;
-
-# Réinit réelle (etcd ok, tapez REINITIALISER)
-./scripts/hub/mojaloop-purge-dfsp.sh --reset --execute --scale-down &lt;fspid&gt;
-# exemple fictif : … --reset --execute --scale-down dfsp-a
-
-# Réinit périodique — tous les DFSP hors Hub (pas de liste)
-./scripts/hub/mojaloop-purge-dfsp.sh --reset \
-  --since '2026-10-19 18:00:00' --until '2026-10-19 21:00:00' \
-  --sql-out /tmp/reset-period.sql
-
-./scripts/hub/mojaloop-purge-dfsp.sh --reset \
-  --since '2026-10-19 18:00:00' --until '2026-10-19 21:00:00' \
-  --execute --scale-down
-
-# Plusieurs inactifs / tests (exemple lab) — purge
-./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql \
-  &lt;fspid&gt; [&lt;fspid2&gt; …]
-
-# Purge réelle : --execute (pas --excute)
-./scripts/hub/mojaloop-purge-dfsp.sh --execute --scale-down \
-  &lt;fspid&gt; [&lt;fspid2&gt; …]
-# exemple fictif : … --execute --scale-down dfsp-a dfsp-b
-</code></pre>
-        <table>
-          <tr><th>Option</th><th>Effet</th></tr>
-          <tr><td><code>--reset</code> / <code>--reinit</code></td><td>Réinit : DFSP conservé ; transferts, positions (à 0), ALIAS, MSISDN vidés</td></tr>
-          <tr><td><code>--since TS</code> / <code>--until TS</code></td><td>Avec <code>--reset</code> uniquement. Intervalle <code>[since, until)</code> sur <code>createdDate</code>. Positions = delta. Oracles intactes. Ex. <code>2026-10-01</code> ou <code>2026-10-01 14:30:00</code>.</td></tr>
-          <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>
-          <tr><td><code>--execute</code></td><td>COMMIT après un dry-run rejoué</td></tr>
-          <tr><td><code>-y</code></td><td>Pas de prompt (<code>SUPPRIMER</code> / <code>REINITIALISER</code>)</td></tr>
-          <tr><td><code>--skip-oracle</code></td><td>Ne pas toucher MSISDN / ALIAS (déjà le cas en mode période)</td></tr>
-          <tr><td><code>--no-backup</code></td><td>Pas de mysqldump (défaut : <code>./mojaloop-backups</code>)</td></tr>
-          <tr><td><code>--allow-inflight</code></td><td>Autoriser malgré des transferts non finalisés</td></tr>
-          <tr><td><code>--scale-down</code> / <code>--restart</code></td><td>Arrêt / redémarrage des Deployments du switch</td></tr>
-        </table>
-        <div class="note">
-          <strong>Transferts ouverts</strong>
-          S’il reste des états <code>RESERVED</code> / <code>RECEIVED_*</code> (dans la période si <code>--since/--until</code>), <code>--execute</code> est refusé sauf <code>--allow-inflight</code> (alors <code>reservedValue</code> des survivants n’est pas recalculé). Préférer <code>--scale-down</code> et attendre la finalisation.
-        </div>
-        <h3>Hors script</h3>
-        <ul class="check">
-          <li>Après <code>--reset</code> <em>sans</em> période : reprovisionner les alias ALS / oracle. Comptes et endpoints Hub déjà là. Pour retirer des alias <strong>sans</strong> toucher le ledger : <a href="#hub-purge-alias">purge alias</a>.</li>
-          <li>Après réinit <strong>périodique</strong> : alias déjà là ; vérifier positions Hub et une fenêtre settlement <code>OPEN</code>.</li>
-          <li>Après purge : client Hydra, MCM, CA / certs Vault — l’enrolment reste tant qu’on ne le retire pas à la main.</li>
-          <li>Stack SDK 1:1 (<code>manage.sh down</code>) ou détachement overlay (<code>docker stop mcm-agent-…</code> puis <code>just build</code>) — seulement si le DFSP quitte le nœud.</li>
-          <li>WAF / DNS du FQDN : inchangés en <code>--reset</code> ; à retirer seulement après une purge complète.</li>
-          <li>Si aucune fenêtre settlement <code>OPEN</code> : le hub refuse les transferts jusqu’à réouverture.</li>
-        </ul>
-        <div class="ctx">
-          <strong>Contexte actuel — lab</strong>
-          Cluster switch (ex. <code>ml-test</code>), VIP API <code>&lt;KUBE_API_VIP&gt;</code> (exemple fictif <code>192.0.2.25</code>). Lancer le script depuis une machine qui a <code>kubectl</code> vers ce cluster (hôte Proxmox / bastion), pas depuis le seul nœud SDK.
-        </div>
-      </section>
-
-      <section id="hub-purge-alias" class="section">
-        <div class="badges">
-          <span class="badge">oracle_alias</span>
-          <span class="badge">dry-run par défaut</span>
-          <span class="badge">ALS</span>
-        </div>
-        <h2>Hub — purge d’alias ALS</h2>
-        <p class="lead">Script <code>scripts/hub/mojaloop-purge-alias.sh</code> : supprime des enregistrements dans <code>oracle_alias.mappings</code> (et optionnellement les <code>participants</code> orphelins). <strong>Ne touche pas</strong> au ledger, MCM, Hydra ni Vault — complémentaire de la <a href="#hub-purge">purge DFSP</a>.</p>
-        <div class="warn">
-          <strong>Dry-run d’abord</strong>
-          Sans <code>--execute</code>, les <code>DELETE</code> passent dans une transaction puis <code>ROLLBACK</code>. Confirmation interactive : taper <code>SUPPRIMER</code> (ou <code>-y</code>).
-        </div>
-        <h3>Périmètre</h3>
-        <table>
-          <tr><th>Store</th><th>Effet</th></tr>
-          <tr><td><code>oracle_alias.mappings</code></td><td>Lignes matchées par valeur d’alias et/ou <code>fspId</code></td></tr>
-          <tr><td><code>oracle_alias.participants</code></td><td>Seulement avec <code>--clean-participants</code> (fsp sans plus aucun mapping)</td></tr>
-          <tr><td><code>central_ledger</code> / MCM / Hydra / Vault</td><td><strong>Inchangés</strong></td></tr>
-        </table>
-        <p>Colonne valeur détectée automatiquement : <code>alias</code>, <code>aliasId</code>, <code>partyId</code>, <code>idValue</code> ou <code>value</code>. Cible lab : PXC <code>data/mojaloop-db-pxc-0</code>, secret <code>data/mojaloop-db-secrets</code> clé <code>root</code>.</p>
-        <h3>Prérequis</h3>
-<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
-chmod +x scripts/hub/mojaloop-purge-alias.sh
-kubectl get --raw=/healthz/etcd   # attendu : ok
-</code></pre>
-        <h3>Lister avant de supprimer</h3>
-<pre><code># Tous les alias d’un DFSP
-./scripts/hub/mojaloop-purge-alias.sh --list --fsp &lt;fspid&gt;
-
-# Un ou plusieurs alias (dry-run = affichage + ROLLBACK)
-./scripts/hub/mojaloop-purge-alias.sh ALIAS1 ALIAS2 ALIAS3
-./scripts/hub/mojaloop-purge-alias.sh 'ALIAS1,ALIAS2,ALIAS3,ALIAS4,ALIAS5'
-</code></pre>
-        <h3>Commandes</h3>
-<pre><code># Dry-run (défaut) — un alias
-./scripts/hub/mojaloop-purge-alias.sh &lt;alias&gt;
-
-# Plusieurs alias (espaces ou virgules entre quotes)
-./scripts/hub/mojaloop-purge-alias.sh ALIAS1 ALIAS2 ALIAS3
-./scripts/hub/mojaloop-purge-alias.sh 'ALIAS1,ALIAS2,ALIAS3'
-
-# Tous les alias d’un DFSP
-./scripts/hub/mojaloop-purge-alias.sh --fsp &lt;fspid&gt;
-
-# Fichier (un alias par ligne, # = commentaire)
-./scripts/hub/mojaloop-purge-alias.sh -f /tmp/aliases.txt
-
-# Appliquer
-./scripts/hub/mojaloop-purge-alias.sh --execute -y ALIAS1 ALIAS2
-./scripts/hub/mojaloop-purge-alias.sh --execute -y --fsp &lt;fspid&gt; --clean-participants
-
-# SQL de relecture
-./scripts/hub/mojaloop-purge-alias.sh --sql-out /tmp/alias-dry.sql ALIAS1 ALIAS2
-</code></pre>
-        <table>
-          <tr><th>Option</th><th>Effet</th></tr>
-          <tr><td><code>--list</code></td><td>Affiche les lignes matchées, pas de DELETE</td></tr>
-          <tr><td><code>--fsp DFSP</code></td><td>Filtre / cible tous les alias de ce <code>fspId</code> (répétable)</td></tr>
-          <tr><td><code>-f</code> / <code>--alias-file</code></td><td>Liste depuis un fichier</td></tr>
-          <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>
-          <tr><td><code>--execute</code></td><td>COMMIT réel</td></tr>
-          <tr><td><code>-y</code></td><td>Pas de prompt <code>SUPPRIMER</code></td></tr>
-          <tr><td><code>--clean-participants</code></td><td>Supprime les <code>participants</code> devenus orphelins</td></tr>
-          <tr><td><code>--sql-out FICHIER</code></td><td>Écrit le SQL généré</td></tr>
-        </table>
-        <div class="note">
-          <strong>Intersection</strong>
-          Si tu combines <code>--fsp</code> et des valeurs d’alias, seules les lignes qui matchent <strong>les deux</strong> sont touchées (<code>AND</code>).
-        </div>
-        <div class="ctx">
-          <strong>Quand utiliser quoi</strong>
-          Alias de test / wrong FSP → <code>mojaloop-purge-alias.sh</code>. Recyclage ledger complet (transferts + MSISDN + tous les ALIAS) → <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh --reset</code></a>. Effacer une fenêtre de tests sans toucher les alias → <code>--reset --since/--until</code>. Retrait du participant → purge sans <code>--reset</code>.
         </div>
       </section>
 
@@ -1271,6 +1079,90 @@ kubectl get --raw=/healthz/etcd   # attendu : ok
         </table>
       </section>
 
+      <section id="prerequis" class="section">
+        <h2>Prérequis overlay</h2>
+        <p>Périmètre <strong>from scratch</strong> : on suppose qu’aucun outil n’est encore installé sur le nœud, et que le DFSP n’existe pas encore au Hub. Si le switch Mojaloop n’existe pas du tout, son déploiement (ALS, quoting, ledger, MCM, Hydra) est un projet distinct listé ici comme dépendance, pas comme procédure overlay.</p>
+
+        <h3>A. Nœud Linux (rien d’installé)</h3>
+        <ul class="check">
+          <li>VM Linux (x86_64), accès root/sudo, disque pour images + volumes Vault.</li>
+          <li>Docker Engine 24+ et Compose v2, git, curl, jq, openssl, gettext-base (<code>envsubst</code>), <code>just</code>.</li>
+          <li>Pull possible : <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>, <code>hashicorp/vault:1.20</code>, <code>ndelma/mcm-agent:0.1.1</code>, <code>redis:7-alpine</code>, <code>nginx:1.27-alpine</code>.</li>
+          <li>Clone de l’overlay + templates Compose participant.</li>
+          <li>Ports hôtes libres : UI agent (un port par DFSP) ; couple overlay inbound/outbound/metrics (ex. 11000/11001/11040) ; ne pas republier <code>4004</code> sur l’hôte.</li>
+        </ul>
+<pre><code># exemple Debian/Ubuntu
+sudo apt-get update
+sudo apt-get install -y git curl jq openssl gettext-base ca-certificates
+# installer Docker Engine + plugin compose (doc Docker officielle)
+sudo apt-get install -y just
+docker version
+docker compose version
+
+git clone &lt;repo-toolkit&gt;
+# overlay : contrib/sdk-scheme-adapter-multi-tenant
+# justfile : cp …/justfile ~/.justfile
+</code></pre>
+
+        <h3>B. Hub / switch (doit exister avant tout DFSP)</h3>
+        <ul class="check">
+          <li>MCM, Hydra (OIDC <code>client_credentials</code>), Keto (droits DFSP), central-ledger, ALS, quoting, transfers.</li>
+          <li>Hub CA, Hub JWS, Hub servercerts MCM (sinon Status agent bloqué).</li>
+          <li>Endpoint FSPIOP mTLS (lab : <code>extapi.<HUB_DOMAIN></code>).</li>
+          <li>Zone monétaire (lab : <code>XOF</code>).</li>
+          <li>Droit admin : créer client Hydra, DFSP MCM, participant ledger, signer CSR.</li>
+        </ul>
+        <p>Tests Hub (depuis une machine qui joint le WAF) :</p>
+<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.<HUB_DOMAIN>/pm4mlapi/health
+# 200
+
+curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
+  -d 'grant_type=client_credentials' \
+  -d 'client_id=&lt;DFSP_ID&gt;' \
+  -d 'client_secret=&lt;SECRET&gt;'
+# JSON access_token pas une page HTML Envoy
+</code></pre>
+
+        <h3>C. DNS + WAF TLS (rien de configuré pour ce DFSP)</h3>
+        <ul class="check">
+          <li>Zone DNS contrôlée ; records <code>A</code> : <code>&lt;id&gt;.&lt;suffixe&gt;</code> et <code>mcm-&lt;id&gt;.&lt;suffixe&gt;</code> → IP publique du WAF (pas l’IP SDK).</li>
+          <li>Nginx (ou équivalent) : vhost 443 + redirect 80 ; SAN cert = wildcard du suffixe (ex. <code>*.ext.<HUB_DOMAIN></code>).</li>
+          <li>Firewall : Hub → WAF:443 ; WAF → <code>SDK_HOST:IN</code> ; CBS → <code>SDK_HOST:OUT</code> ; inbound overlay pas ouvert à Internet brut.</li>
+        </ul>
+
+        <h3>D. CBS / connecteur (nouveau tenant)</h3>
+        <ul class="check">
+          <li>API joignable depuis le nœud SDK : <code>host:port/mojaloop</code> (JSON, pas HTML SPA).</li>
+          <li><code>GET /mojaloop/parties/{idType}/{idValue}</code>, <code>POST /mojaloop/quoterequests</code>, <code>POST /mojaloop/transfers</code>.</li>
+          <li>Table <code>cbs.counterparties</code> (ou équivalent) pour chaque FSP payer inbound.</li>
+          <li>Alias / comptes de test. Paiements initiés : <code>http://&lt;SDK_HOST&gt;:&lt;OUT&gt;/&lt;dfspId&gt;/transfers</code>.</li>
+          <li>Sans <code>http://</code> dans <code>BACKEND_ENDPOINT</code>, sans espace.</li>
+        </ul>
+<pre><code>wget -qO- "http://&lt;CBS_HOST&gt;:&lt;PORT&gt;/mojaloop/parties/ALIAS/&lt;id-test&gt;"
+# JSON attendu un dump HTML = mauvais host (SPA Granian)
+</code></pre>
+
+        <h3>E. Identité DFSP (à créer voir onboarding)</h3>
+        <ul class="check">
+          <li><code>DFSP_ID</code> unique = Hydra <code>client_id</code> = MCM = ledger = label Host (casse exacte).</li>
+          <li>Secret Hydra → uniquement le <code>.env</code> de <em>cet</em> agent (jamais le shell exporté d’un autre DFSP).</li>
+          <li>Compose <strong>agent</strong> : Vault UID 100, <code>SKIP_SETCAP</code> + <code>disable_mlock</code> (image 1.20.4), <code>default.json</code> JSON valide, <code>tokenPath</code> <code>/oauth2/token</code>.</li>
+          <li>Status MCM <strong>8/8</strong> avant de brancher le SDK overlay.</li>
+          <li><code>container_name</code> stable <code>mcm-agent-&lt;DFSP_ID&gt;</code>.</li>
+        </ul>
+
+        <h3>F. Overlay déjà prévu sur le nœud</h3>
+        <ul class="check">
+          <li>Clone overlay + <code>just</code>. Les réseaux / <code>MGMT_API_WS_URLS</code> sont générés (<code>just build</code>), pas figés dans le compose.</li>
+          <li>Ne pas changer CoreDNS / WAF des DFSPs <strong>hors</strong> overlay.</li>
+        </ul>
+
+        <div class="ctx">
+          <strong>Contexte actuel lab (zone <HUB_DOMAIN>)</strong>
+          WAF <code><WAF_WAN></code> · gw-ext Hydra/MCM <code><HUB_HYDRA></code> · extapi <code><HUB_EXTAPI></code> · SDK <code><SDK_HOST></code> · OpenCBS exemple <code><CBS_HOST>:8100/mojaloop</code>. extra_hosts agent : hydra/mcm → WAF, extapi → <code>.28</code>. Overlay déjà <code>11000</code>/<code>11001</code>.
+        </div>
+      </section>
+
       <section id="deploiement" class="section">
         <h2>Guide de déploiement overlay</h2>
         <p>Procédure <strong>générique</strong> (placeholders). Les IPs / tenants du lab (zone <HUB_DOMAIN>) sont en bas, rubrique <em>Contexte actuel</em>. Pour un DFSP neuf en SDK dédié, suivre <a href="#workflow">Workflow</a>.</p>
@@ -1390,90 +1282,6 @@ curl -sS http://127.0.0.1:11000/pm4ml-tenants
 just logs-overlay
 </code></pre>
           <p>WAF DFSP overlay : <code>proxy_pass http://<SDK_HOST>:11000;</code>. UI <code>mcm-<fspid></code> → <code>:10203</code> (pas 11000). Fallback backend Compose : <code><CBS_HOST>:8100/mojaloop</code>.</p>
-        </div>
-      </section>
-
-      <section id="prerequis" class="section">
-        <h2>Prérequis overlay</h2>
-        <p>Périmètre <strong>from scratch</strong> : on suppose qu’aucun outil n’est encore installé sur le nœud, et que le DFSP n’existe pas encore au Hub. Si le switch Mojaloop n’existe pas du tout, son déploiement (ALS, quoting, ledger, MCM, Hydra) est un projet distinct listé ici comme dépendance, pas comme procédure overlay.</p>
-
-        <h3>A. Nœud Linux (rien d’installé)</h3>
-        <ul class="check">
-          <li>VM Linux (x86_64), accès root/sudo, disque pour images + volumes Vault.</li>
-          <li>Docker Engine 24+ et Compose v2, git, curl, jq, openssl, gettext-base (<code>envsubst</code>), <code>just</code>.</li>
-          <li>Pull possible : <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>, <code>hashicorp/vault:1.20</code>, <code>ndelma/mcm-agent:0.1.1</code>, <code>redis:7-alpine</code>, <code>nginx:1.27-alpine</code>.</li>
-          <li>Clone de l’overlay + templates Compose participant.</li>
-          <li>Ports hôtes libres : UI agent (un port par DFSP) ; couple overlay inbound/outbound/metrics (ex. 11000/11001/11040) ; ne pas republier <code>4004</code> sur l’hôte.</li>
-        </ul>
-<pre><code># exemple Debian/Ubuntu
-sudo apt-get update
-sudo apt-get install -y git curl jq openssl gettext-base ca-certificates
-# installer Docker Engine + plugin compose (doc Docker officielle)
-sudo apt-get install -y just
-docker version
-docker compose version
-
-git clone &lt;repo-toolkit&gt;
-# overlay : contrib/sdk-scheme-adapter-multi-tenant
-# justfile : cp …/justfile ~/.justfile
-</code></pre>
-
-        <h3>B. Hub / switch (doit exister avant tout DFSP)</h3>
-        <ul class="check">
-          <li>MCM, Hydra (OIDC <code>client_credentials</code>), Keto (droits DFSP), central-ledger, ALS, quoting, transfers.</li>
-          <li>Hub CA, Hub JWS, Hub servercerts MCM (sinon Status agent bloqué).</li>
-          <li>Endpoint FSPIOP mTLS (lab : <code>extapi.<HUB_DOMAIN></code>).</li>
-          <li>Zone monétaire (lab : <code>XOF</code>).</li>
-          <li>Droit admin : créer client Hydra, DFSP MCM, participant ledger, signer CSR.</li>
-        </ul>
-        <p>Tests Hub (depuis une machine qui joint le WAF) :</p>
-<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.<HUB_DOMAIN>/pm4mlapi/health
-# 200
-
-curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
-  -d 'grant_type=client_credentials' \
-  -d 'client_id=&lt;DFSP_ID&gt;' \
-  -d 'client_secret=&lt;SECRET&gt;'
-# JSON access_token pas une page HTML Envoy
-</code></pre>
-
-        <h3>C. DNS + WAF TLS (rien de configuré pour ce DFSP)</h3>
-        <ul class="check">
-          <li>Zone DNS contrôlée ; records <code>A</code> : <code>&lt;id&gt;.&lt;suffixe&gt;</code> et <code>mcm-&lt;id&gt;.&lt;suffixe&gt;</code> → IP publique du WAF (pas l’IP SDK).</li>
-          <li>Nginx (ou équivalent) : vhost 443 + redirect 80 ; SAN cert = wildcard du suffixe (ex. <code>*.ext.<HUB_DOMAIN></code>).</li>
-          <li>Firewall : Hub → WAF:443 ; WAF → <code>SDK_HOST:IN</code> ; CBS → <code>SDK_HOST:OUT</code> ; inbound overlay pas ouvert à Internet brut.</li>
-        </ul>
-
-        <h3>D. CBS / connecteur (nouveau tenant)</h3>
-        <ul class="check">
-          <li>API joignable depuis le nœud SDK : <code>host:port/mojaloop</code> (JSON, pas HTML SPA).</li>
-          <li><code>GET /mojaloop/parties/{idType}/{idValue}</code>, <code>POST /mojaloop/quoterequests</code>, <code>POST /mojaloop/transfers</code>.</li>
-          <li>Table <code>cbs.counterparties</code> (ou équivalent) pour chaque FSP payer inbound.</li>
-          <li>Alias / comptes de test. Paiements initiés : <code>http://&lt;SDK_HOST&gt;:&lt;OUT&gt;/&lt;dfspId&gt;/transfers</code>.</li>
-          <li>Sans <code>http://</code> dans <code>BACKEND_ENDPOINT</code>, sans espace.</li>
-        </ul>
-<pre><code>wget -qO- "http://&lt;CBS_HOST&gt;:&lt;PORT&gt;/mojaloop/parties/ALIAS/&lt;id-test&gt;"
-# JSON attendu un dump HTML = mauvais host (SPA Granian)
-</code></pre>
-
-        <h3>E. Identité DFSP (à créer voir onboarding)</h3>
-        <ul class="check">
-          <li><code>DFSP_ID</code> unique = Hydra <code>client_id</code> = MCM = ledger = label Host (casse exacte).</li>
-          <li>Secret Hydra → uniquement le <code>.env</code> de <em>cet</em> agent (jamais le shell exporté d’un autre DFSP).</li>
-          <li>Compose <strong>agent</strong> : Vault UID 100, <code>SKIP_SETCAP</code> + <code>disable_mlock</code> (image 1.20.4), <code>default.json</code> JSON valide, <code>tokenPath</code> <code>/oauth2/token</code>.</li>
-          <li>Status MCM <strong>8/8</strong> avant de brancher le SDK overlay.</li>
-          <li><code>container_name</code> stable <code>mcm-agent-&lt;DFSP_ID&gt;</code>.</li>
-        </ul>
-
-        <h3>F. Overlay déjà prévu sur le nœud</h3>
-        <ul class="check">
-          <li>Clone overlay + <code>just</code>. Les réseaux / <code>MGMT_API_WS_URLS</code> sont générés (<code>just build</code>), pas figés dans le compose.</li>
-          <li>Ne pas changer CoreDNS / WAF des DFSPs <strong>hors</strong> overlay.</li>
-        </ul>
-
-        <div class="ctx">
-          <strong>Contexte actuel lab (zone <HUB_DOMAIN>)</strong>
-          WAF <code><WAF_WAN></code> · gw-ext Hydra/MCM <code><HUB_HYDRA></code> · extapi <code><HUB_EXTAPI></code> · SDK <code><SDK_HOST></code> · OpenCBS exemple <code><CBS_HOST>:8100/mojaloop</code>. extra_hosts agent : hydra/mcm → WAF, extapi → <code>.28</code>. Overlay déjà <code>11000</code>/<code>11001</code>.
         </div>
       </section>
 
@@ -1720,6 +1528,200 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
 # iptables -A INPUT -p tcp --dport 11001 -j DROP
 </code></pre>
         <p>Registre complet (incidents 14–15 oct. 2026) : <a href="#risques">Risques transferts</a>.</p>
+      </section>
+
+      <section id="hub-purge" class="section">
+        <div class="badges">
+          <span class="badge high">irréversible</span>
+          <span class="badge">dry-run par défaut</span>
+          <span class="badge">--reset</span>
+          <span class="badge">--since / --until</span>
+        </div>
+        <h2>Hub — purge, réinit ou période</h2>
+        <p class="lead">Script <code>scripts/hub/mojaloop-purge-dfsp.sh</code> : <strong>purge</strong> (retrait du participant), <code>--reset</code> (réinit ledger complète), ou <code>--reset --since/--until</code> (fenêtre temporelle). Ni SDK, ni MCM / Hydra / Vault. Markdown : <code>docs/adopter/mojaloop-purge-dfsp.md</code>.</p>
+        <div class="warn">
+          <strong>Dry-run d’abord</strong>
+          Sans <code>--execute</code>, tout passe dans une transaction MySQL puis <code>ROLLBACK</code>. Le Hub (<code>participantId</code> 1) est protégé. Confirmation : <code>SUPPRIMER</code> (purge) ou <code>REINITIALISER</code> (<code>--reset</code>).
+        </div>
+        <h3>Purge vs <code>--reset</code> vs période</h3>
+        <table>
+          <tr><th></th><th>Purge (défaut)</th><th><code>--reset</code></th><th><code>--reset --since/--until</code></th></tr>
+          <tr><td>Participant, comptes, limites, endpoints, tokens</td><td>supprimés</td><td><strong>conservés</strong></td><td><strong>conservés</strong></td></tr>
+          <tr><td>Transferts / quotes / settlements</td><td>tous</td><td>tous</td><td>seulement <code>createdDate</code> ∈ <code>[since, until)</code></td></tr>
+          <tr><td>Positions</td><td>lignes supprimées</td><td><code>value</code> / <code>reservedValue</code> → <strong>0</strong></td><td><strong>delta</strong> des mouvements retirés (Hub + DFSP)</td></tr>
+          <tr><td>Oracle MSISDN / ALIAS</td><td>supprimés</td><td>supprimés</td><td><strong>intactes</strong> (forcé)</td></tr>
+          <tr><td>MCM / Hydra / Vault</td><td>inchangés</td><td>inchangés</td><td>inchangés</td></tr>
+          <tr><td>Confirmation <code>--execute</code></td><td><code>SUPPRIMER</code></td><td><code>REINITIALISER</code></td><td><code>REINITIALISER</code></td></tr>
+        </table>
+        <h3>Réinit périodique (<code>--since</code> / <code>--until</code>)</h3>
+        <p>Uniquement avec <code>--reset</code>. Intervalle <strong>demi-ouvert</strong> <code>[since, until)</code> sur <code>createdDate</code> (transferts, bulk, FX, quotes, settlements, mouvements de position). Formats : <code>YYYY-MM-DD</code> ou <code>YYYY-MM-DD HH:MM:SS</code> (le <code>T</code> / <code>Z</code> ISO sont acceptés).</p>
+        <ul class="check">
+          <li>Pas de remise à zéro globale des positions — uniquement l’inverse du delta des écritures de la fenêtre.</li>
+          <li>Oracles non touchés (équivalent automatique de <code>--skip-oracle</code>).</li>
+          <li><strong>Sans liste de DFSP</strong> : découverte automatique de tous les <code>participant.name</code> hors Hub (évite d’en oublier).</li>
+          <li>Les fenêtres <code>settlementWindow</code> ne sont pas recréées : vérifier qu’il reste une fenêtre <code>OPEN</code> après coup.</li>
+        </ul>
+        <h3>Ce qui est touché (stores)</h3>
+        <table>
+          <tr><th>Store</th><th>Périmètre</th></tr>
+          <tr><td><code>central_ledger</code></td><td>Selon le mode ci-dessus</td></tr>
+          <tr><td>Oracles</td><td><code>oracle_msisdn</code>, <code>oracle_alias</code> (sauf <code>--skip-oracle</code> ou mode période)</td></tr>
+          <tr><td>Redis <code>--redis</code></td><td>Clés <code>ttk-redis</code> contenant le nom du DFSP</td></tr>
+          <tr><td>Mongo <code>--mongo-purge</code></td><td>Vidage <strong>global</strong> de <code>mlos</code>, <code>ttk</code>, <code>reporting_events</code></td></tr>
+          <tr><td>Kafka <code>--kafka-purge</code></td><td>Topics Strimzi <code>^topic-</code> (pas par DFSP)</td></tr>
+        </table>
+        <p>Cible lab : namespace <code>mojaloop</code> (Deployments), <code>data</code> (PXC <code>mojaloop-db-pxc-0</code> / conteneur <code>pxc</code>). Mot de passe root : secret <code>data/mojaloop-db-secrets</code>, clé <code>root</code>. Chart Mojaloop 17.2.0 / central-ledger v19.12.7.</p>
+        <h3>Prérequis</h3>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
+# pas le kubeconfig ml-cc (artefacts New2 : …/artifacts/ml-test/kubernetes/kubeconfig)
+chmod +x scripts/hub/mojaloop-purge-dfsp.sh
+</code></pre>
+        <h3>Santé etcd (avant dry-run et avant <code>--execute</code>)</h3>
+        <p>Un <code>kubectl exec</code> coupé (VIP / etcd) produit <code>Base central_ledger introuvable</code> ou un <em>Périmètre</em> vide. Ne pas COMMIT tant que etcd n’est pas <code>ok</code>.</p>
+<pre><code>kubectl get --raw=/healthz/etcd
+# attendu : ok
+# si « etcd failed » : attendre, ne pas --execute
+</code></pre>
+        <h3>Lister les DFSP (noms ledger)</h3>
+        <p>Utiliser exactement <code>participant.name</code> (pas le FQDN). Le Hub (<code>id</code> 1) ne se passe pas au script.</p>
+<pre><code>PASS=$(kubectl -n data get secret mojaloop-db-secrets -o jsonpath='{.data.root}' | base64 -d)
+kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
+  env MYSQL_PWD="$PASS" mysql -uroot -N -B -e \
+  "SELECT participantId, name, isActive FROM central_ledger.participant ORDER BY participantId;"
+</code></pre>
+        <h3>Commandes</h3>
+<pre><code># Simulation purge (défaut) + SQL de relecture
+./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql &lt;fspid&gt;
+
+# Réinit complète (DFSP conservé) — dry-run
+./scripts/hub/mojaloop-purge-dfsp.sh --reset --sql-out /tmp/reset-dry.sql &lt;fspid&gt;
+
+# Réinit réelle (etcd ok, tapez REINITIALISER)
+./scripts/hub/mojaloop-purge-dfsp.sh --reset --execute --scale-down &lt;fspid&gt;
+# exemple fictif : … --reset --execute --scale-down dfsp-a
+
+# Réinit périodique — tous les DFSP hors Hub (pas de liste)
+./scripts/hub/mojaloop-purge-dfsp.sh --reset \
+  --since '2026-10-19 18:00:00' --until '2026-10-19 21:00:00' \
+  --sql-out /tmp/reset-period.sql
+
+./scripts/hub/mojaloop-purge-dfsp.sh --reset \
+  --since '2026-10-19 18:00:00' --until '2026-10-19 21:00:00' \
+  --execute --scale-down
+
+# Plusieurs inactifs / tests (exemple lab) — purge
+./scripts/hub/mojaloop-purge-dfsp.sh --sql-out /tmp/purge-dry.sql \
+  &lt;fspid&gt; [&lt;fspid2&gt; …]
+
+# Purge réelle : --execute (pas --excute)
+./scripts/hub/mojaloop-purge-dfsp.sh --execute --scale-down \
+  &lt;fspid&gt; [&lt;fspid2&gt; …]
+# exemple fictif : … --execute --scale-down dfsp-a dfsp-b
+</code></pre>
+        <table>
+          <tr><th>Option</th><th>Effet</th></tr>
+          <tr><td><code>--reset</code> / <code>--reinit</code></td><td>Réinit : DFSP conservé ; transferts, positions (à 0), ALIAS, MSISDN vidés</td></tr>
+          <tr><td><code>--since TS</code> / <code>--until TS</code></td><td>Avec <code>--reset</code> uniquement. Intervalle <code>[since, until)</code> sur <code>createdDate</code>. Positions = delta. Oracles intactes. Ex. <code>2026-10-01</code> ou <code>2026-10-01 14:30:00</code>.</td></tr>
+          <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>
+          <tr><td><code>--execute</code></td><td>COMMIT après un dry-run rejoué</td></tr>
+          <tr><td><code>-y</code></td><td>Pas de prompt (<code>SUPPRIMER</code> / <code>REINITIALISER</code>)</td></tr>
+          <tr><td><code>--skip-oracle</code></td><td>Ne pas toucher MSISDN / ALIAS (déjà le cas en mode période)</td></tr>
+          <tr><td><code>--no-backup</code></td><td>Pas de mysqldump (défaut : <code>./mojaloop-backups</code>)</td></tr>
+          <tr><td><code>--allow-inflight</code></td><td>Autoriser malgré des transferts non finalisés</td></tr>
+          <tr><td><code>--scale-down</code> / <code>--restart</code></td><td>Arrêt / redémarrage des Deployments du switch</td></tr>
+        </table>
+        <div class="note">
+          <strong>Transferts ouverts</strong>
+          S’il reste des états <code>RESERVED</code> / <code>RECEIVED_*</code> (dans la période si <code>--since/--until</code>), <code>--execute</code> est refusé sauf <code>--allow-inflight</code> (alors <code>reservedValue</code> des survivants n’est pas recalculé). Préférer <code>--scale-down</code> et attendre la finalisation.
+        </div>
+        <h3>Hors script</h3>
+        <ul class="check">
+          <li>Après <code>--reset</code> <em>sans</em> période : reprovisionner les alias ALS / oracle. Comptes et endpoints Hub déjà là. Pour retirer des alias <strong>sans</strong> toucher le ledger : <a href="#hub-purge-alias">purge alias</a>.</li>
+          <li>Après réinit <strong>périodique</strong> : alias déjà là ; vérifier positions Hub et une fenêtre settlement <code>OPEN</code>.</li>
+          <li>Après purge : client Hydra, MCM, CA / certs Vault — l’enrolment reste tant qu’on ne le retire pas à la main.</li>
+          <li>Stack SDK 1:1 (<code>manage.sh down</code>) ou détachement overlay (<code>docker stop mcm-agent-…</code> puis <code>just build</code>) — seulement si le DFSP quitte le nœud.</li>
+          <li>WAF / DNS du FQDN : inchangés en <code>--reset</code> ; à retirer seulement après une purge complète.</li>
+          <li>Si aucune fenêtre settlement <code>OPEN</code> : le hub refuse les transferts jusqu’à réouverture.</li>
+        </ul>
+        <div class="ctx">
+          <strong>Contexte actuel — lab</strong>
+          Cluster switch (ex. <code>ml-test</code>), VIP API <code>&lt;KUBE_API_VIP&gt;</code> (exemple fictif <code>192.0.2.25</code>). Lancer le script depuis une machine qui a <code>kubectl</code> vers ce cluster (hôte Proxmox / bastion), pas depuis le seul nœud SDK.
+        </div>
+      </section>
+
+      <section id="hub-purge-alias" class="section">
+        <div class="badges">
+          <span class="badge">oracle_alias</span>
+          <span class="badge">dry-run par défaut</span>
+          <span class="badge">ALS</span>
+        </div>
+        <h2>Hub — purge d’alias ALS</h2>
+        <p class="lead">Script <code>scripts/hub/mojaloop-purge-alias.sh</code> : supprime des enregistrements dans <code>oracle_alias.mappings</code> (et optionnellement les <code>participants</code> orphelins). <strong>Ne touche pas</strong> au ledger, MCM, Hydra ni Vault — complémentaire de la <a href="#hub-purge">purge DFSP</a>.</p>
+        <div class="warn">
+          <strong>Dry-run d’abord</strong>
+          Sans <code>--execute</code>, les <code>DELETE</code> passent dans une transaction puis <code>ROLLBACK</code>. Confirmation interactive : taper <code>SUPPRIMER</code> (ou <code>-y</code>).
+        </div>
+        <h3>Périmètre</h3>
+        <table>
+          <tr><th>Store</th><th>Effet</th></tr>
+          <tr><td><code>oracle_alias.mappings</code></td><td>Lignes matchées par valeur d’alias et/ou <code>fspId</code></td></tr>
+          <tr><td><code>oracle_alias.participants</code></td><td>Seulement avec <code>--clean-participants</code> (fsp sans plus aucun mapping)</td></tr>
+          <tr><td><code>central_ledger</code> / MCM / Hydra / Vault</td><td><strong>Inchangés</strong></td></tr>
+        </table>
+        <p>Colonne valeur détectée automatiquement : <code>alias</code>, <code>aliasId</code>, <code>partyId</code>, <code>idValue</code> ou <code>value</code>. Cible lab : PXC <code>data/mojaloop-db-pxc-0</code>, secret <code>data/mojaloop-db-secrets</code> clé <code>root</code>.</p>
+        <h3>Prérequis</h3>
+<pre><code>export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig
+chmod +x scripts/hub/mojaloop-purge-alias.sh
+kubectl get --raw=/healthz/etcd   # attendu : ok
+</code></pre>
+        <h3>Lister avant de supprimer</h3>
+<pre><code># Tous les alias d’un DFSP
+./scripts/hub/mojaloop-purge-alias.sh --list --fsp &lt;fspid&gt;
+
+# Un ou plusieurs alias (dry-run = affichage + ROLLBACK)
+./scripts/hub/mojaloop-purge-alias.sh ALIAS1 ALIAS2 ALIAS3
+./scripts/hub/mojaloop-purge-alias.sh 'ALIAS1,ALIAS2,ALIAS3,ALIAS4,ALIAS5'
+</code></pre>
+        <h3>Commandes</h3>
+<pre><code># Dry-run (défaut) — un alias
+./scripts/hub/mojaloop-purge-alias.sh &lt;alias&gt;
+
+# Plusieurs alias (espaces ou virgules entre quotes)
+./scripts/hub/mojaloop-purge-alias.sh ALIAS1 ALIAS2 ALIAS3
+./scripts/hub/mojaloop-purge-alias.sh 'ALIAS1,ALIAS2,ALIAS3'
+
+# Tous les alias d’un DFSP
+./scripts/hub/mojaloop-purge-alias.sh --fsp &lt;fspid&gt;
+
+# Fichier (un alias par ligne, # = commentaire)
+./scripts/hub/mojaloop-purge-alias.sh -f /tmp/aliases.txt
+
+# Appliquer
+./scripts/hub/mojaloop-purge-alias.sh --execute -y ALIAS1 ALIAS2
+./scripts/hub/mojaloop-purge-alias.sh --execute -y --fsp &lt;fspid&gt; --clean-participants
+
+# SQL de relecture
+./scripts/hub/mojaloop-purge-alias.sh --sql-out /tmp/alias-dry.sql ALIAS1 ALIAS2
+</code></pre>
+        <table>
+          <tr><th>Option</th><th>Effet</th></tr>
+          <tr><td><code>--list</code></td><td>Affiche les lignes matchées, pas de DELETE</td></tr>
+          <tr><td><code>--fsp DFSP</code></td><td>Filtre / cible tous les alias de ce <code>fspId</code> (répétable)</td></tr>
+          <tr><td><code>-f</code> / <code>--alias-file</code></td><td>Liste depuis un fichier</td></tr>
+          <tr><td><code>--dry-run</code></td><td>Force la simulation (gagne sur <code>--execute</code>)</td></tr>
+          <tr><td><code>--execute</code></td><td>COMMIT réel</td></tr>
+          <tr><td><code>-y</code></td><td>Pas de prompt <code>SUPPRIMER</code></td></tr>
+          <tr><td><code>--clean-participants</code></td><td>Supprime les <code>participants</code> devenus orphelins</td></tr>
+          <tr><td><code>--sql-out FICHIER</code></td><td>Écrit le SQL généré</td></tr>
+        </table>
+        <div class="note">
+          <strong>Intersection</strong>
+          Si tu combines <code>--fsp</code> et des valeurs d’alias, seules les lignes qui matchent <strong>les deux</strong> sont touchées (<code>AND</code>).
+        </div>
+        <div class="ctx">
+          <strong>Quand utiliser quoi</strong>
+          Alias de test / wrong FSP → <code>mojaloop-purge-alias.sh</code>. Recyclage ledger complet (transferts + MSISDN + tous les ALIAS) → <a href="#hub-purge"><code>mojaloop-purge-dfsp.sh --reset</code></a>. Effacer une fenêtre de tests sans toucher les alias → <code>--reset --since/--until</code>. Retrait du participant → purge sans <code>--reset</code>.
+        </div>
       </section>
 
       <section id="risques" class="section">
