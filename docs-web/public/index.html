@@ -39,6 +39,7 @@
           <a class="item" href="#workflow-start">5. Démarrer</a>
           <a class="item" href="#workflow-nginx">6. Nginx et DNS</a>
           <a class="item" href="#workflow-fin">7. MCM et contrôle</a>
+          <a class="item" href="#mono-vault-reboot">Après reboot (Vault)</a>
         </details>
         <details class="nav-group" open>
           <summary>Hub Mojaloop</summary>
@@ -50,16 +51,6 @@
           <a class="item" href="#hub-dns">DNS, URLs, pannes</a>
           <a class="item" href="#hub-purge">Purge / réinit / période</a>
           <a class="item" href="#hub-purge-alias">Purge alias ALS</a>
-        </details>
-        <details class="nav-group" open>
-          <summary>SDK 1:1</summary>
-          <a class="item" href="#mono">Architecture 1:1</a>
-          <a class="item" href="#mono-prerequis">Prérequis 1:1</a>
-          <a class="item" href="#mono-deploy">Déploiement Compose</a>
-          <a class="item" href="#mono-config">Configuration</a>
-          <a class="item" href="#mono-waf">WAF, MCM, tests</a>
-          <a class="item" href="#mono-helm">Chart Helm</a>
-          <a class="item" href="#mono-vault-reboot">Après reboot (Vault)</a>
         </details>
         <details class="nav-group" open>
           <summary>SDK overlay</summary>
@@ -134,8 +125,8 @@
             <p>Talos, Flux, Proxmox : <code>ml-cc</code> (tooling) puis <code>ml-test</code> (zone DNS distincte). Ledger : <a href="#hub-purge">purge, <code>--reset</code> ou période</a> · alias : <a href="#hub-purge-alias">purge ALIAS</a>.</p>
           </div>
           <div class="card">
-            <h3>SDK 1:1 (défaut toolkit)</h3>
-            <p>Vault + mcm-agent + SDK officiel + Redis. Un couple de ports par DFSP. Voir <a href="#mono">Architecture 1:1</a>.</p>
+            <h3>SDK dédié (défaut)</h3>
+            <p>Vault + mcm-agent + SDK officiel + Redis. Un bloc de ports par DFSP. Procédure : <a href="#workflow">Workflow</a>.</p>
           </div>
           <div class="card">
             <h3>Overlay (opt-in)</h3>
@@ -153,7 +144,7 @@
           <span class="badge">1 DFSP = 1 copie</span>
         </div>
         <h2>Onboarding d’un DFSP</h2>
-        <p class="lead">Procédure à suivre dans l’ordre, de la fiche jusqu’au nginx. Une étape n’est finie que lorsque le résultat attendu est affiché. On ne passe pas à la suivante avant.</p>
+        <p class="lead">Procédure à suivre dans l’ordre, de la fiche jusqu’au nginx. Une étape n’est finie que lorsque le résultat attendu est affiché. On ne passe pas à la suivante avant. C’est le déploiement Docker sur le nœud SDK (un dossier par DFSP). Un cluster Kubernetes participant n’utilise pas ces étapes : chart <code>dfsp/</code>, voir <code>docs/participant/installation.md</code>.</p>
         <p>Deux machines, deux sessions. Ne pas mélanger les commandes.</p>
         <table>
           <tr><th>Où</th><th>Connexion</th><th>Rôle</th></tr>
@@ -180,7 +171,29 @@
           <li><a href="#workflow-start">Démarrer</a> avec <code>unset</code> puis <code>./manage.sh up -d</code>.</li>
           <li><a href="#workflow-nginx">Nginx et DNS</a> sur le WAF.</li>
           <li><a href="#workflow-fin">MCM, callbacks, contrôle</a>.</li>
+          <li>Après un reboot du nœud : <a href="#mono-vault-reboot">ouvrir les Vault</a>.</li>
         </ol>
+        <h3>Ce qui démarre</h3>
+        <table>
+          <tr><th>Conteneur</th><th>Rôle</th></tr>
+          <tr><td><code>sdk-vault-…</code> + <code>sdk-vault-init-…</code></td><td>Coffre du DFSP (certificats, secret de l’agent). L’init ne redémarre pas seul.</td></tr>
+          <tr><td><code>mcm-agent-…</code></td><td>Parle au MCM et pousse la config au SDK sur le port interne <code>4004</code>.</td></tr>
+          <tr><td><code>sdk-scheme-adapter-…</code></td><td>Reçoit le Hub (inbound) et envoie vers le Hub (outbound).</td></tr>
+          <tr><td><code>sdk-redis-…</code></td><td>Mémoire de ce SDK seulement.</td></tr>
+          <tr><td><code>sim-backend-…</code></td><td>Seulement si on lance le profil <code>simulator</code> à la place du CBS.</td></tr>
+        </table>
+        <div class="flow">
+          <div class="box">Hub</div><span class="arrow">→</span>
+          <div class="box">https://FQDN</div><span class="arrow">→</span>
+          <div class="box">WAF :443</div><span class="arrow">→</span>
+          <div class="box">SDK inbound</div>
+        </div>
+        <div class="flow">
+          <div class="box">CBS ou test</div><span class="arrow">→</span>
+          <div class="box">SDK outbound :XX01</div><span class="arrow">→</span>
+          <div class="box">extapi (mTLS)</div>
+        </div>
+        <p>Le Hub n’appelle jamais <code>172.25.2.117</code>. Il appelle le nom de la ligne C. L’appel sortant du CBS ou d’un test va sur <code>http://172.25.2.117:</code> ligne G, chemin <code>/transfers</code> ou <code>/parties/…</code>, <strong>sans</strong> préfixe <code>/banque-test</code> (ça, c’est l’overlay).</p>
         <div class="warn">
           <strong>À ne pas faire</strong>
           Ne pas effacer un volume <code>vault-data</code> / <code>vault-creds</code>. Ne pas mettre <code>http://</code> dans <code>BACKEND_ENDPOINT</code>. Ne pas envoyer le FQDN du DFSP vers le port outbound (<code>XX01</code>). Le port <code>4004</code> reste interne à Docker : on ne l’écrit pas dans nginx.
@@ -189,7 +202,21 @@
 
       <section id="workflow-fiche" class="section">
         <h2>1. Fiche DFSP</h2>
-        <p class="lead">Remplir ce tableau avant toute commande. L’identifiant (ligne A) est le même partout : MCM, Hydra, fichiers, DNS. Minuscules, sans espace. Exemple utilisé ensuite : <code>banque-test</code>. Remplace-le par la ligne A.</p>
+        <p class="lead">Créer d’abord l’identité côté Hub, puis remplir le tableau. L’identifiant (ligne A) est le même partout : MCM, Hydra, fichiers, DNS. Minuscules, sans espace. Exemple utilisé ensuite : <code>banque-test</code>. Remplace-le par la ligne A.</p>
+        <h3>Créer l’identité (avant les fichiers)</h3>
+        <ol class="steps">
+          <li>Client Hydra : type <code>client_credentials</code>, méthode <code>client_secret_post</code>, <code>client_id</code> = ligne A. Copier le secret affiché une seule fois → ligne B.</li>
+          <li>MCM : créer le DFSP, zone monétaire <code>XOF</code>, même identifiant.</li>
+          <li>Central-ledger : créer le participant avec le même identifiant.</li>
+        </ol>
+        <p>Le Hub doit déjà répondre. Sinon l’agent restera bloqué (CA, clés JWS ou certificats serveur du Hub absents).</p>
+<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.openmfi.org/pm4mlapi/health
+# attendu : 200
+
+curl -sk -X POST 'https://hydra.ext.openmfi.org/oauth2/token' \
+  -d 'grant_type=client_credentials' -d 'client_id=banque-test' -d 'client_secret=LE_SECRET_LIGNE_B'
+# attendu : un JSON avec access_token, pas une page HTML « Route not found »
+</code></pre>
         <table>
           <tr><th>Ligne</th><th>Information</th><th>Exemple</th><th>Règle</th></tr>
           <tr><td>A</td><td>Identifiant <code>fspid</code></td><td><code>banque-test</code></td><td>Identique au client créé dans le MCM. Pas de majuscule.</td></tr>
@@ -311,7 +338,8 @@ ports:
   - "10340:5040"    # metrics
   - "10304:3003"    # simulateur
 </code></pre>
-        <div class="warn">Ne pas modifier <code>extra_hosts</code> (<code>41.214.65.90</code> et <code>172.16.2.28</code>). Ne pas ajouter de ligne <code>ports</code> pour <code>4004</code> : il est déjà en <code>expose</code>.</div>
+        <div class="warn">Ne pas modifier <code>extra_hosts</code> (<code>41.214.65.90</code> et <code>172.16.2.28</code>). Ne pas ajouter de ligne <code>ports</code> pour <code>4004</code> : il est déjà en <code>expose</code>. Ne pas ajouter <code>PM4ML_MULTI_TENANT</code> ni <code>MULTI_DFSP</code>. Ne pas figer de sous-réseau Docker (<code>ipam</code> / <code>subnet</code>) : ça chevauche un autre DFSP.</div>
+        <p>Laisser tels quels dans le template : <code>INBOUND_MUTUAL_TLS_ENABLED</code> à <code>false</code> (le TLS s’arrête sur le WAF), <code>OUTBOUND_MUTUAL_TLS_ENABLED</code> à <code>true</code>, <code>PEER_ENDPOINT</code> et les autres endpoints Hub = <code>extapi.openmfi.org</code> sans <code>https://</code>. Les flags JWS du fichier sont ceux du boot ; l’agent les remplace ensuite. Ne pas les inventer.</p>
 
         <h3><code>deploy/config/mcm-agent/default.json</code></h3>
 <pre><code>nano config/mcm-agent/default.json
@@ -322,7 +350,7 @@ ports:
           <tr><td><code>common.dfspId</code></td><td>ligne A</td></tr>
           <tr><td><code>mcm.auth.creds.clientId</code></td><td>ligne A</td></tr>
           <tr><td><code>mcm.auth.creds.clientSecret</code></td><td>ligne B</td></tr>
-          <tr><td><code>mcm.auth.tokenPath</code></td><td><code>/oauth2/token</code> (ne pas mettre un chemin <code>/realms/dfsps/…</code>)</td></tr>
+          <tr><td><code>mcm.auth.tokenPath</code></td><td><code>/oauth2/token</code>. Un chemin <code>/realms/dfsps/…</code> donne une page 404 du Hub, pas un jeton.</td></tr>
           <tr><td><code>mcm.auth.tokenEndpoint</code></td><td><code>https://hydra.ext.openmfi.org/oauth2/token</code></td></tr>
           <tr><td><code>sdk.oauth.clientKey</code></td><td>ligne A</td></tr>
           <tr><td><code>sdk.oauth.clientSecret</code></td><td>ligne B (le même secret que plus haut)</td></tr>
@@ -337,6 +365,7 @@ ports:
 python3 -m json.tool config/mcm-agent/default.json &gt;/dev/null &amp;&amp; echo "OK: JSON valide"
 </code></pre>
         <p>Remplace <code>ANCIEN_ID</code> par l’identifiant qui était dans le template. Les deux lignes doivent afficher <code>OK</code>.</p>
+        <div class="warn">Si le stack a <strong>déjà</strong> démarré avec un autre secret et que l’agent ignore le nouveau : le coffre Vault a gardé l’ancien. Seulement dans ce cas, supprimer les deux volumes de <em>ce</em> DFSP (<code>docker volume ls</code>, noms qui contiennent la ligne A), puis refaire <code>./manage.sh up -d</code>. Cela recrée la CA. Ne pas supprimer le volume d’un autre DFSP.</div>
       </section>
 
       <section id="workflow-start" class="section">
@@ -356,7 +385,15 @@ unset DFSP_ID DFSP_FQDN HUB_IAM_PROVIDER_URL MCM_SERVER_ENDPOINT
           <li><code>mcm-agent-…</code> passe <code>healthy</code> (attendre jusqu’à une minute).</li>
           <li><code>sdk-scheme-adapter-…</code> est <code>Up</code>.</li>
         </ul>
-        <p>Les <code>unset</code> effacent <code>DFSP_ID</code> dans ce terminal. Pour les commandes suivantes, retaper <code>export DFSP_ID=banque-test</code> (ligne A). Si l’agent répète <code>Vault is sealed</code> :</p>
+        <p>Sans CBS, à la place de <code>./manage.sh up -d</code> :</p>
+<pre><code>./manage.sh --profile simulator up -d
+</code></pre>
+        <p>Si les logs Vault disent <code>permission denied</code> sur <code>/vault/data</code> alors que <code>./manage.sh up</code> a bien affiché le <code>chown</code>, arrêter et relancer l’init (ne pas supprimer les volumes) :</p>
+<pre><code>./manage.sh stop
+./manage.sh rm -f vault-init
+./manage.sh up -d
+</code></pre>
+        <p>Les <code>unset</code> effacent <code>DFSP_ID</code> dans ce terminal. Pour la commande suivante, retaper la ligne A. Si l’agent répète <code>Vault is sealed</code> :</p>
 <pre><code>export DFSP_ID=banque-test
 docker start sdk-vault-init-$DFSP_ID
 docker logs sdk-vault-init-$DFSP_ID
@@ -376,7 +413,7 @@ docker exec mcm-agent-$DFSP_ID printenv AUTH_CLIENT_ID
         <p>Résultat attendu : 2 réponses, 0 % de perte. Sinon, ne pas éditer nginx : le trafic n’arrivera pas au SDK.</p>
 
         <h3>DNS</h3>
-        <p>Deux noms, la même adresse IP que les autres DFSP déjà en service (celle de <code>moov.ext.openmfi.org</code>) :</p>
+        <p>Deux noms, vers l’adresse <strong>publique du WAF</strong> (la même que <code>moov.ext.openmfi.org</code>). Pas vers <code>172.25.2.117</code> : le Hub ne joint pas le nœud SDK.</p>
         <ul class="check">
           <li>ligne C — <code>banque-test.ext.openmfi.org</code></li>
           <li>ligne D — <code>mcm-banque-test.ext.openmfi.org</code></li>
@@ -425,14 +462,42 @@ docker exec mcm-agent-$DFSP_ID printenv AUTH_CLIENT_ID
         <p>Résultat attendu : <code>syntax is ok</code> et <code>test is successful</code>. Si <code>nginx -t</code> échoue, ne pas recharger : corriger le fichier et relancer <code>nginx -t</code>.</p>
 <pre><code>curl -skI https://banque-test.ext.openmfi.org/ping
 </code></pre>
-        <p>Résultat attendu : <code>HTTP/2 405</code>. Un <code>502</code> veut dire que le port de gauche dans <code>proxy_pass</code> n’est pas le port inbound, ou que le conteneur SDK n’est pas démarré.</p>
+        <p>Résultat attendu : <code>HTTP/2 405</code>. Un <code>502</code> veut dire que le port de gauche dans <code>proxy_pass</code> n’est pas le port inbound, ou que le conteneur SDK n’est pas démarré. Ne pas envoyer <code>*.ext.openmfi.org</code> vers OpenCBS.</p>
+<pre><code>echo | openssl s_client -servername banque-test.ext.openmfi.org -connect 41.214.65.90:443 2&gt;/dev/null \
+  | openssl x509 -noout -ext subjectAltName
+</code></pre>
+        <p>Le certificat doit couvrir <code>openmfi.org</code> (souvent un wildcard). Un certificat <code>bftlabs.org</code> ou un autre nom veut dire que le <code>server_name</code> est tombé dans le mauvais bloc nginx.</p>
       </section>
 
       <section id="workflow-fin" class="section">
         <h2>7. MCM et contrôle</h2>
         <h3>Écran MCM</h3>
         <p>Ouvrir <code>https://mcm-banque-test.ext.openmfi.org</code> (ligne D). L’enrôlement doit avancer jusqu’au statut <strong>8/8</strong>. Tant qu’un certificat est en attente, le signer dans l’admin du Hub.</p>
-        <p>Tous les callbacks FSPIOP = <code>https://</code> + ligne C, sans chemin <code>/quotes</code>, sans adresse IP, sans <code>http://</code>. Un callback en <code>http://</code> laisse passer un GET puis fait échouer le transfert.</p>
+        <p>Tous les callbacks FSPIOP = <code>https://</code> + ligne C, sans chemin <code>/quotes</code>, sans adresse IP, sans <code>http://</code>. Un callback en <code>http://</code> laisse passer un GET puis fait échouer le POST (erreur Hub <code>1001</code>).</p>
+
+        <h3>Alias (si un numéro doit arriver sur ce DFSP)</h3>
+        <p>Un alias ne désigne qu’un seul FSP. Depuis la machine qui a <code>kubectl</code> sur le Hub :</p>
+<pre><code>kubectl -n mojaloop port-forward svc/moja-alias-oracle 3001:3001
+curl -sS http://127.0.0.1:3001/mappings | jq .
+</code></pre>
+        <p>Si le numéro est encore sur un autre DFSP, le supprimer de cet autre FSP avant de le créer ici (<code>DELETE /mappings/&lt;id&gt;</code>).</p>
+
+        <h3>Essai de transfert</h3>
+        <p>Depuis une machine qui voit <code>172.25.2.117</code>, vers le port outbound (ligne G), pas vers le WAF. Remplacer les alias et le port.</p>
+<pre><code>curl -sS "http://172.25.2.117:LIGNE_G/parties/ALIAS/ALIAS_PAYEE"
+# le fspId renvoyé doit être la ligne A
+
+curl -sS -X POST "http://172.25.2.117:LIGNE_G/transfers" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "homeTransactionId": "onboard-1",
+    "from": { "displayName": "PAYER", "idType": "ALIAS", "idValue": "ALIAS_PAYER" },
+    "to":   { "idType": "ALIAS", "idValue": "ALIAS_PAYEE" },
+    "amountType": "SEND", "currency": "XOF", "amount": "100",
+    "transactionType": "TRANSFER", "note": "onboarding", "channel": "mobile_app"
+  }'
+</code></pre>
+        <p>Résultat attendu : <code>currentState</code> <code>COMPLETED</code>. Si le lookup passe et le transfert échoue en <code>1001</code>, le callback est encore en <code>http://</code> ou pointe vers une IP.</p>
 
         <h3>Contrôle sur le nœud SDK</h3>
 <pre><code>export DFSP_ID=banque-test
@@ -448,7 +513,97 @@ docker logs mcm-agent-$DFSP_ID --tail 30
           <li>L’écran MCM (ligne D) s’ouvre.</li>
           <li>Statut MCM 8/8.</li>
         </ul>
-        <p>Le DFSP est onboardé quand ces cinq points sont vrais. Les tests de transfert se font ensuite vers <code>http://172.25.2.117:</code> ligne G <code>/transfers</code> (outbound), pas vers le WAF.</p>
+        <p>Le DFSP est onboardé quand ces cinq points sont vrais, plus l’essai de transfert si un alias existe. Les appels de test vont vers <code>http://172.25.2.117:</code> ligne G, pas vers le WAF.</p>
+      </section>
+
+      <section id="mono-vault-reboot" class="section">
+        <div class="badges">
+          <span class="badge">ops</span>
+          <span class="badge">Compose 1:1</span>
+        </div>
+        <h2>Après reboot — unseal Vault (nœud SDK)</h2>
+        <p class="lead">Sur le nœud Docker (<code>&lt;SDK_HOST&gt;</code>), chaque DFSP a son Vault fichier (<code>sdk-vault-&lt;fspid&gt;</code>). Au reboot de la VM (ou restart du démon Docker), Vault redémarre <strong>sealed</strong>. Le job <code>vault-init</code> a <code>restart: "no"</code> : il ne se relance pas seul. L’agent crash alors avec <code>Vault is sealed</code>.</p>
+        <div class="warn">
+          Ne <strong>pas</strong> faire <code>docker volume rm …vault-data…</code> ni <code>vault operator init</code> à nouveau : les clés / role-id sont déjà dans le volume <code>vault-creds</code>. Un wipe détruit la CA et les secrets PM4ML du DFSP.
+        </div>
+
+        <h3>1. Symptômes</h3>
+        <table>
+          <tr><th>Observé</th><th>Cause</th></tr>
+          <tr><td><code>mcm-agent-&lt;fspid&gt;</code> Restarting / unhealthy</td><td>AppRole impossible tant que Vault est sealed</td></tr>
+          <tr><td>Logs agent : <code>Failed to start MCM Agent: Vault is sealed</code></td><td>Attend unseal</td></tr>
+          <tr><td><code>sdk-vault-&lt;fspid&gt;</code> Up, mais <code>Sealed true</code></td><td>Normal après reboot sans vault-init</td></tr>
+          <tr><td><code>sdk-vault-init-&lt;fspid&gt;</code> Exited (souvent depuis le 1er boot)</td><td>Attendu : <code>restart: "no"</code></td></tr>
+        </table>
+<pre><code># sur &lt;SDK_HOST&gt;
+docker ps -a --format 'table {{.Names}}\t{{.Status}}' | grep -E 'vault|mcm-agent'
+docker logs mcm-agent-&lt;fspid&gt; --tail 30
+</code></pre>
+
+        <h3>2. Confirmer sealed</h3>
+<pre><code>for v in $(docker ps --format '{{.Names}}' | grep -E '^sdk-vault-' | grep -v init); do
+  echo "===== $v ====="
+  docker exec "$v" vault status 2&gt;/dev/null | grep -E 'Initialized|Sealed|Version' \
+    || echo "(exec failed)"
+done
+# Attendu juste après reboot : Initialized true · Sealed true
+</code></pre>
+
+        <h3>3. Relancer vault-init (unseal)</h3>
+        <p>Le script monté dans <code>vault-init</code> lit les unseal keys déjà écrites dans <code>vault-creds</code>, unseal, puis réécrit role-id / secret-id si besoin. Exit 0 = OK.</p>
+<pre><code># Lister les jobs présents (DFSPs déjà déployés sur le nœud)
+docker ps -a --format '{{.Names}}' | grep vault-init | sort
+
+# Un DFSP
+docker start sdk-vault-init-&lt;fspid&gt;
+docker logs -f sdk-vault-init-&lt;fspid&gt;
+# Ctrl-C quand exit ; Status doit finir par Exited (0)
+
+# Tous les DFSPs actifs du nœud d’un coup
+docker ps -a --format '{{.Names}}' | grep vault-init | xargs -r docker start
+sleep 5
+docker ps -a --filter name=vault-init --format 'table {{.Names}}\t{{.Status}}'
+</code></pre>
+        <p>Via Compose / <code>manage.sh</code> (répertoire deploy du DFSP) :</p>
+<pre><code>cd "$DEPLOY"   # …/sdk-scheme-adapter/deploy du DFSP
+unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
+./manage.sh up -d vault-init
+./manage.sh logs vault-init --tail 40
+# ou : docker start sdk-vault-init-${DFSP_ID}
+</code></pre>
+
+        <h3>4. Vérifier</h3>
+<pre><code># Sealed false sur chaque Vault actif
+for v in $(docker ps --format '{{.Names}}' | grep -E '^sdk-vault-' | grep -v init); do
+  echo -n "$v → "
+  docker exec "$v" vault status 2&gt;/dev/null | grep Sealed || echo "?"
+done
+
+# Agents qui se stabilisent (healthy / Up sans restart loop)
+docker ps --format 'table {{.Names}}\t{{.Status}}' | grep mcm-agent
+
+# Spot-check un agent
+docker logs mcm-agent-&lt;fspid&gt; --tail 20
+# plus de « Vault is sealed »
+</code></pre>
+        <ul class="check">
+          <li><code>Sealed false</code> sur chaque <code>sdk-vault-&lt;fspid&gt;</code> utile.</li>
+          <li><code>mcm-agent-&lt;fspid&gt;</code> healthy ; websocket <code>:4004</code> OK pour le SDK.</li>
+          <li>SDK 1:1 ou overlay : pas de restart agent en boucle.</li>
+        </ul>
+
+        <h3>Si vault-init échoue</h3>
+        <table>
+          <tr><th>Erreur</th><th>Action</th></tr>
+          <tr><td><code>permission denied</code> sur <code>/vault/data</code></td><td><code>./manage.sh stop</code>, <code>./manage.sh rm -f vault-init</code>, puis <code>./manage.sh up -d</code> (le chown est dans <code>up</code>). Ne pas supprimer les volumes.</td></tr>
+          <tr><td><code>No such container</code></td><td>Le stack a été <code>rm</code> : <code>./manage.sh up -d vault vault-init …</code> depuis le deploy</td></tr>
+          <tr><td>Vault <code>Initialized false</code></td><td>Volume data perdu — re-init = nouveau DFSP côté secrets ; récupérer un backup creds si possible</td></tr>
+          <tr><td>Agent sealed alors que Vault OK</td><td>Attendre healthcheck / <code>docker restart mcm-agent-&lt;fspid&gt;</code></td></tr>
+        </table>
+        <div class="ctx">
+          <strong>Hub (ml-test) ≠ Vault DFSP</strong>
+          Le Vault Raft du switch (<code>vault-0</code>…, unseal 5/3) est documenté sous <a href="#risques-ops">Runbook overlay</a>. Ici : uniquement les Vaults Compose du nœud SDK.
+        </div>
       </section>
 
       <section id="hub" class="section">
@@ -1039,472 +1194,6 @@ kubectl get --raw=/healthz/etcd   # attendu : ok
         </ul>
       </section>
 
-      <section id="mono" class="section">
-        <h2>Architecture — SDK mono-tenant (toolkit)</h2>
-        <p>C’est le mode <strong>supporté par défaut</strong> du toolkit : un DFSP = un projet Compose (lab) ou un release Helm (K8s). Image officielle <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>, <strong>sans</strong> overlay. Un websocket PM4ML, un <code>DFSP_ID</code>, un FQDN, un Vault, un couple inbound/outbound.</p>
-
-        <h3>Ce que le toolkit déploie (1:1)</h3>
-        <table>
-          <tr><th>Composant</th><th>Rôle</th><th>Compose lab</th></tr>
-          <tr><td>Vault + vault-init</td><td>CA privée du DFSP, role-id / secret-id pour l’agent</td><td><code>hashicorp/vault:1.20</code></td></tr>
-          <tr><td>mcm-agent</td><td>Enrôlement MCM, CSR, push conf au SDK (WS <code>:4004</code>)</td><td><code>ndelma/mcm-agent:0.1.1</code></td></tr>
-          <tr><td>sdk-scheme-adapter</td><td>FSPIOP inbound Hub / outbound CBS</td><td>conteneur <code>:5000</code> / <code>:5001</code></td></tr>
-          <tr><td>Redis</td><td>Cache / état du SDK de <em>ce</em> DFSP</td><td><code>redis:7-alpine</code></td></tr>
-          <tr><td>sim-backend (option)</td><td>Simulateur si pas de CBS</td><td>profil Compose <code>simulator</code></td></tr>
-        </table>
-
-        <h3>Flux (identique conceptuellement à l’overlay, process non partagé)</h3>
-        <div class="flow">
-          <div class="box">Hub → https://FQDN</div>
-          <span class="arrow">→</span>
-          <div class="box">WAF :443</div>
-          <span class="arrow">→</span>
-          <div class="box">SDK inbound :PORT_IN</div>
-          <span class="arrow">→</span>
-          <div class="box">CBS /mojaloop</div>
-        </div>
-        <div class="flow">
-          <div class="box">CBS → SDK outbound :PORT_OUT</div>
-          <span class="arrow">→</span>
-          <div class="box">/transfers (sans préfixe DFSP)</div>
-          <span class="arrow">→</span>
-          <div class="box">mTLS extapi</div>
-        </div>
-        <p>Le Hub n’atteint <strong>jamais</strong> l’IP du nœud SDK. Callbacks = origine <code>https://&lt;DFSP_FQDN&gt;</code> (le Hub ajoute <code>/quotes</code>, <code>/transfers</code>…).</p>
-
-        <h3>Deux artefacts toolkit</h3>
-        <table>
-          <tr><th>Voie</th><th>Quand</th><th>Docs sources</th></tr>
-          <tr><td>Docker Compose lab</td><td>Nœud Linux, zone <code>&lt;HUB_DOMAIN&gt;</code>, plusieurs DFSP sur le même host</td><td><code>docs/participant/dfsp-onboarding-compose-lab.md</code> + <code>examples/*-docker-compose.yml</code></td></tr>
-          <tr><td>Helm chart <code>dfsp/</code></td><td>Cluster K8s du participant, LoadBalancer inbound</td><td><code>docs/participant/installation.md</code></td></tr>
-        </table>
-        <p>« Multi-DFSP » dans le toolkit Compose = <strong>N projets</strong> (<code>manage.sh</code> par répertoire), pas <code>MULTI_DFSP=true</code> dans un seul SDK. Voir <a href="#valeur">Mono vs overlay</a>.</p>
-        <div class="ctx">
-          <strong>Contexte actuel — lab (zone <HUB_DOMAIN>)</strong>
-          Nœud <code>&lt;SDK_HOST&gt;</code> (ex. <code>192.0.2.117</code>), WAF <code>&lt;WAF_WAN&gt;</code> (ex. <code>203.0.113.90</code>), extapi <code>&lt;HUB_EXTAPI&gt;</code>. Overlay et stacks 1:1 peuvent cohabiter : ne pas arrêter un autre <code>&lt;fspid&gt;</code> pour un cutover.
-        </div>
-      </section>
-
-      <section id="mono-prerequis" class="section">
-        <h2>Prérequis — SDK 1:1 from scratch</h2>
-        <p>Rien n’est installé sur le nœud ; le DFSP n’existe pas encore au Hub. Le switch (ALS, quoting, ledger, MCM, Hydra) doit déjà tourner — voir <a href="#hub">Hub — architecture ml-cc</a>.</p>
-
-        <h3>A. Nœud Linux</h3>
-        <ul class="check">
-          <li>VM x86_64, sudo, disque images + volumes Vault.</li>
-          <li>Docker Engine 24+, Compose v2, git, curl, jq, openssl, gettext-base.</li>
-          <li>Pull : <code>mojaloop/sdk-scheme-adapter:v24.9.0</code>, <code>hashicorp/vault:1.20</code>, <code>ndelma/mcm-agent:0.1.1</code>, <code>redis:7-alpine</code>.</li>
-          <li>Toolkit cloné : templates <code>docs/participant/examples/</code>, <code>manage.sh</code>, <code>scripts/vault-init.sh</code>.</li>
-          <li>Quatre ports hôtes <strong>libres et uniques</strong> : inbound, outbound, metrics, UI mcm-agent. Ne pas publier <code>4004</code> sur l’hôte.</li>
-        </ul>
-<pre><code>sudo apt-get update
-sudo apt-get install -y git curl jq openssl gettext-base ca-certificates
-docker version &amp;&amp; docker compose version
-git clone &lt;repo-ml-deployment-toolkit&gt;
-</code></pre>
-
-        <h3>B. Hub / switch</h3>
-        <ul class="check">
-          <li>MCM, Hydra <code>client_credentials</code>, Keto, central-ledger, ALS, quoting, transfers.</li>
-          <li>Hub CA, Hub JWS, Hub servercerts (Status agent sinon bloqué).</li>
-          <li>FQDN FSPIOP mTLS (lab : <code>extapi.<HUB_DOMAIN></code>), zone (lab : <code>XOF</code>).</li>
-        </ul>
-<pre><code>curl -sk -o /dev/null -w "%{http_code}\n" https://mcm.ext.<HUB_DOMAIN>/pm4mlapi/health
-# 200
-curl -sk -X POST 'https://hydra.ext.<HUB_DOMAIN>/oauth2/token' \
-  -d 'grant_type=client_credentials' -d 'client_id=&lt;DFSP_ID&gt;' -d 'client_secret=&lt;SECRET&gt;'
-</code></pre>
-
-        <h3>C. DNS + WAF</h3>
-        <ul class="check">
-          <li>A : <code>&lt;id&gt;.&lt;suffixe&gt;</code> et <code>mcm-&lt;id&gt;.&lt;suffixe&gt;</code> → IP publique WAF (pas l’IP SDK).</li>
-          <li>Nginx 443 + redirect 80 ; SAN wildcard du suffixe.</li>
-          <li>Firewall : Hub → WAF:443 ; WAF → <code>SDK_HOST:PORT_INBOUND</code> ; CBS → <code>SDK_HOST:PORT_OUTBOUND</code>.</li>
-        </ul>
-
-        <h3>D. CBS ou simulateur</h3>
-        <ul class="check">
-          <li>Connecteur <code>host:port/mojaloop</code> JSON, ou profil Compose <code>simulator</code>.</li>
-          <li><code>GET /parties</code>, <code>POST /quoterequests</code>, <code>POST /transfers</code>.</li>
-          <li><code>cbs.counterparties</code> pour chaque FSP payer. Paiements initiés vers <code>http://&lt;SDK_HOST&gt;:&lt;PORT_OUTBOUND&gt;/transfers</code> (<strong>sans</strong> préfixe <code>/{dfspId}/</code> — c’est le 1:1).</li>
-        </ul>
-
-        <h3>E. Identité</h3>
-        <ul class="check">
-          <li><code>DFSP_ID</code> = Hydra <code>client_id</code> = MCM = ledger = Host (casse exacte).</li>
-          <li>Secret uniquement dans le <code>.env</code> de ce répertoire. Toujours <code>unset AUTH_CLIENT_*</code> + <code>./manage.sh</code>.</li>
-        </ul>
-        <div class="ctx">
-          <strong>Contexte actuel</strong>
-          extra_hosts agent : hydra/mcm → <code><WAF_WAN></code>, extapi → <code><HUB_EXTAPI></code>. OpenCBS exemple <code><CBS_HOST>:8100/mojaloop</code>. Ports hôte : <code>just ports</code> sur le nœud (juste-fichier overlay) — prochain bloc libre <code>XX00/XX01/XX03/XX04/XX40</code>. <code>just ports 10300 1</code> pour un seul bloc à partir de 10300.
-        </div>
-      </section>
-
-      <section id="mono-deploy" class="section">
-        <h2>Déploiement Compose — SDK 1:1</h2>
-        <p>Un répertoire <code>deploy/</code> par DFSP. Ne jamais lancer deux stacks depuis le même dossier ni avec le même <code>name:</code> Compose.</p>
-<pre><code>export DFSP_ID=acme
-export DFSP_FQDN=${DFSP_ID}.ext.<HUB_DOMAIN>
-export SDK_HOST=<SDK_HOST>
-export WAF_IP=<WAF_WAN>
-export PORT_IN=10200
-export PORT_OUT=10201
-export PORT_MET=10240
-export PORT_MCM=10203
-export CBS_BACKEND=<CBS_HOST>:8100/mojaloop
-export DEPLOY=~/dfsp-${DFSP_ID}-mojaloop/sdk-scheme-adapter/deploy
-export TOOLKIT=/chemin/ml-deployment-toolkit
-</code></pre>
-
-        <h3>1. Hub</h3>
-        <ol class="steps">
-          <li>Client Hydra <code>client_credentials</code>, <code>client_id=${DFSP_ID}</code>, <code>client_secret_post</code>.</li>
-          <li>MCM : créer le DFSP, zone <code>XOF</code>.</li>
-          <li>Participant central-ledger.</li>
-        </ol>
-
-        <h3>2. Arborescence et fichiers</h3>
-<pre><code>mkdir -p "${DEPLOY}/config/mcm-agent" "${DEPLOY}/scripts"
-cp "$TOOLKIT/docs/participant/examples/<fspid>-docker-compose.yml" "${DEPLOY}/docker-compose.yml"
-cp "$TOOLKIT/docs/participant/examples/manage.sh" "${DEPLOY}/manage.sh"
-cp "$TOOLKIT/docs/participant/examples/dfsp-mcm-agent-default.template.json" \
-   "${DEPLOY}/config/mcm-agent/default.json"
-# vault-init.sh depuis un stack validé (<fspid> / <fspid>)
-chmod +x "${DEPLOY}/manage.sh" "${DEPLOY}/scripts/vault-init.sh"
-</code></pre>
-        <p>Dans le compose : remplacer l’id d’exemple, les <code>container_name</code>, les ports hôtes, le <code>name:</code> du projet. <strong>Pas</strong> de subnet IPAM figé. Vault image 1.20.4 : <code>user: "100:100"</code>, <code>SKIP_SETCAP</code>, <code>disable_mlock</code> (les stacks anciens type <fspid> peuvent encore être <code>0:0</code> s’ils bootent).</p>
-        <p>SDK 1:1 <strong>inclus</strong> le service <code>sdk-scheme-adapter</code> :</p>
-<pre><code>    ports:
-      - "${PORT_IN}:5000"
-      - "${PORT_OUT}:5001"
-      - "${PORT_MET}:5040"
-    environment:
-      PM4ML_ENABLED: "true"
-      MGMT_API_WS_URL: "mcm-agent-${DFSP_ID}"
-      MGMT_API_WS_PORT: "4004"
-      DFSP_ID: ${DFSP_ID}
-      CACHE_URL: redis://redis:6379
-</code></pre>
-        <p>Pas de <code>PM4ML_MULTI_TENANT</code>. Pas de <code>MULTI_DFSP</code> (sauf CBS qui multiplexe vraiment par path — cas rare, distinct de l’overlay).</p>
-
-        <h3>3. <code>.env</code></h3>
-<pre><code>cat &gt; "${DEPLOY}/.env" &lt;&lt;EOF
-COMPOSE_PROJECT_NAME=${DFSP_ID}
-AUTH_CLIENT_ID=${DFSP_ID}
-AUTH_CLIENT_SECRET=&lt;secret_hydra&gt;
-DFSP_FQDN=${DFSP_FQDN}
-LOG_LEVEL=info
-BACKEND_ENDPOINT=${CBS_BACKEND}
-USE_SIM_BACKEND=false
-EOF
-# pas d'espace après '=', pas de http:// dans BACKEND_ENDPOINT
-</code></pre>
-
-        <h3>4. Démarrage</h3>
-<pre><code>cd "$DEPLOY"
-unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
-./manage.sh up -d
-./manage.sh ps
-./manage.sh logs -f vault-init mcm-agent sdk-scheme-adapter
-</code></pre>
-        <p><code>./manage.sh up</code> fait ce <code>chown 100:100</code> sur les volumes Vault <strong>avant</strong> de démarrer (noms résolus, ex. <code>moov-bj_vault-data-moov-bj</code>). Vault-init doit finir exit 0. Si un stack a été lancé avec <code>docker compose</code> seul et que <code>mkdir /vault/data/core: permission denied</code> :</p>
-<pre><code>./manage.sh stop
-# ou, à la main (même effet que manage.sh) :
-docker run --rm \
-  -v &lt;projet&gt;_vault-data-${DFSP_ID}:/vault/data \
-  -v &lt;projet&gt;_vault-creds-${DFSP_ID}:/vault/creds \
-  alpine chown -R 100:100 /vault/data /vault/creds
-./manage.sh rm -f vault-init
-./manage.sh up -d
-</code></pre>
-<pre><code>./manage.sh config | grep AUTH_CLIENT_ID
-docker exec mcm-agent-${DFSP_ID} printenv AUTH_CLIENT_ID
-docker exec sdk-scheme-adapter-${DFSP_ID} wget -q --spider http://127.0.0.1:5040/metrics
-</code></pre>
-        <div class="note">Après <strong>reboot VM</strong> ou restart Docker : Vault revient <strong>sealed</strong> (<code>vault-init</code> a <code>restart: "no"</code>). Procédure : <a href="#mono-vault-reboot">Après reboot (Vault)</a>.</div>
-        <p>Simulateur à la place du CBS :</p>
-<pre><code>./manage.sh --profile simulator up -d
-</code></pre>
-
-        <h3>5. Status MCM 8/8</h3>
-        <p>UI : <code>http://${SDK_HOST}:${PORT_MCM}</code> puis <code>https://mcm-${DFSP_ID}.ext.<HUB_DOMAIN></code> après WAF. Hub Admin : signer CSR inbound/outbound.</p>
-<pre><code>TOKEN=…   # client_credentials
-for p in /pm4mlapi/hub/ca /pm4mlapi/hub/jwscerts \
-  /pm4mlapi/dfsps/jwscerts \
-  /pm4mlapi/dfsps/${DFSP_ID}/enrollments/outbound \
-  /pm4mlapi/dfsps/${DFSP_ID}/enrollments/inbound
-do
-  echo -n "$p → "
-  curl -sk -o /tmp/b -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
-    "https://mcm.ext.<HUB_DOMAIN>$p"
-  echo
-done
-</code></pre>
-
-        <div class="ctx">
-          <strong>Contexte actuel — ports déjà pris sur <SDK_HOST></strong>
-          Inventaire figé (peut être dépassé) : 4000/4001/3000 · 5000/5001/5003 · 6000/6001/6003 · 7000/7001/7003 · 8000/8003 · 9000/9003 · 10000/10001/10003 · 10100/10101/10103 · 10200/10201/10203. Source à jour : <code>just ports</code> sur <code>&lt;SDK_HOST&gt;</code>.
-        </div>
-      </section>
-
-      <section id="mono-config" class="section">
-        <h2>Configuration — SDK 1:1</h2>
-
-        <h3><code>default.json</code> (mcm-agent)</h3>
-        <p>Template : <code>docs/participant/examples/dfsp-mcm-agent-default.template.json</code>. Remplacer <code>&lt;DFSP_ID&gt;</code> et le secret. JSON strict.</p>
-        <table>
-          <tr><th>Champ</th><th>Valeur</th></tr>
-          <tr><td><code>mcm.auth.tokenPath</code></td><td><code>/oauth2/token</code> (pas <code>/realms/dfsps/…</code>)</td></tr>
-          <tr><td><code>mcm.auth.tokenEndpoint</code></td><td><code>https://hydra.ext.<HUB_DOMAIN>/oauth2/token</code></td></tr>
-          <tr><td>Endpoints Hub</td><td><strong>Sans</strong> <code>:443</code></td></tr>
-          <tr><td><code>sdk.fqdn</code> / <code>callbackUrl</code></td><td><code>https://&lt;DFSP_FQDN&gt;</code></td></tr>
-          <tr><td><code>sdk.jws</code></td><td><code>sign: true</code>, <code>validateInbound: true</code> (aligné overlay)</td></tr>
-          <tr><td><code>sdk.tls</code></td><td><code>outboundMutual: true</code>, <code>inboundMutual: true</code> (inbound réel = WAF, pas le listen SDK)</td></tr>
-          <tr><td><code>sdk.pm4mlEnabled</code></td><td><code>true</code></td></tr>
-        </table>
-        <p>Après changement de secret / JSON : wipe Vault souvent nécessaire (l’agent préfère les secrets Vault).</p>
-<pre><code>cd "$DEPLOY"
-./manage.sh down
-docker volume rm ${DFSP_ID}_vault-data-${DFSP_ID} ${DFSP_ID}_vault-creds-${DFSP_ID}
-./manage.sh up -d
-</code></pre>
-
-        <h3>Variables SDK (compose)</h3>
-        <table>
-          <tr><th>Variable</th><th>1:1</th></tr>
-          <tr><td><code>PM4ML_ENABLED</code></td><td><code>true</code></td></tr>
-          <tr><td><code>MGMT_API_WS_URL</code></td><td>nom DNS Docker de l’agent (<code>mcm-agent-&lt;id&gt;</code>)</td></tr>
-          <tr><td><code>MGMT_API_WS_PORT</code></td><td><code>4004</code></td></tr>
-          <tr><td><code>DFSP_ID</code></td><td>le vrai id (pas <code>placeholder</code>)</td></tr>
-          <tr><td><code>BACKEND_ENDPOINT</code></td><td><code>host:port/mojaloop</code> — NOTIFY peut écraser</td></tr>
-          <tr><td><code>PEER_ENDPOINT</code> / ALS / quotes / transfers</td><td>FQDN Hub, sans schéma</td></tr>
-          <tr><td><code>INBOUND_MUTUAL_TLS_ENABLED</code></td><td><code>false</code> si TLS terminé au WAF</td></tr>
-          <tr><td><code>OUTBOUND_MUTUAL_TLS_ENABLED</code></td><td><code>true</code> (certs via PM4ML)</td></tr>
-          <tr><td><code>JWS_SIGN</code> / <code>VALIDATE_INBOUND_JWS</code></td><td><code>true</code> (clés via PM4ML)</td></tr>
-          <tr><td><code>NODE_TLS_REJECT_UNAUTHORIZED</code></td><td><code>1</code> (CA Hub dans le slice PM4ML)</td></tr>
-          <tr><td><code>PM4ML_MULTI_TENANT</code></td><td>absent / <code>false</code></td></tr>
-        </table>
-
-        <h3><code>extra_hosts</code></h3>
-        <table>
-          <tr><th>Nom</th><th>Lab openmfi</th></tr>
-          <tr><td><code>hydra.ext.<HUB_DOMAIN></code> / <code>mcm.ext.<HUB_DOMAIN></code></td><td>WAF <code><WAF_WAN></code> (path token <code>/oauth2/token</code>)</td></tr>
-          <tr><td><code>extapi.<HUB_DOMAIN></code></td><td><code><HUB_EXTAPI></code> (mTLS, pas le WAF DFSP)</td></tr>
-        </table>
-        <div class="warn">hydra → <code><HUB_HYDRA></code> <strong>et</strong> agent qui appelle encore <code>/realms/dfsps/…</code> → 404 Envoy. Corriger <code>tokenPath</code> + wipe Vault, ou hydra via IP LAN WAF.</div>
-
-        <h3>Outbound CBS (différence overlay)</h3>
-<pre><code># 1:1 — pas de préfixe
-POST http://&lt;SDK_HOST&gt;:&lt;PORT_OUT&gt;/transfers
-GET  http://&lt;SDK_HOST&gt;:&lt;PORT_OUT&gt;/parties/ALIAS/&lt;id&gt;
-
-# overlay — préfixe obligatoire
-POST http://&lt;SDK_HOST&gt;:11001/&lt;dfspId&gt;/transfers
-</code></pre>
-      </section>
-
-      <section id="mono-waf" class="section">
-        <h2>WAF, MCM, ALS, tests — SDK 1:1</h2>
-
-        <h3>DNS</h3>
-<pre><code># ${DFSP_FQDN}                    A  ${WAF_IP}
-# mcm-${DFSP_ID}.ext.<HUB_DOMAIN>  A  ${WAF_IP}
-# Vérif depuis le nœud SDK ET depuis le cluster Hub : WAF, pas SDK_HOST
-</code></pre>
-
-        <h3>Nginx</h3>
-        <p>Ajouter les deux FQDN au <code>server_name</code> HTTP:80 (301 https). Vhost 443 inbound → <strong>PORT_IN</strong> uniquement (jamais outbound).</p>
-<pre><code>server {
-    listen 443 ssl;
-    http2 on;
-    server_name ${DFSP_ID}.ext.<HUB_DOMAIN>;
-    ssl_certificate     /etc/letsencrypt/live/<HUB_DOMAIN>/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/<HUB_DOMAIN>/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-    location / {
-        proxy_pass http://${SDK_HOST}:${PORT_IN};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_http_version 1.1;
-        proxy_read_timeout 300s;
-    }
-}
-# mcm-${DFSP_ID}.ext.<HUB_DOMAIN> → http://${SDK_HOST}:${PORT_MCM}
-</code></pre>
-<pre><code>sudo nginx -t &amp;&amp; sudo systemctl reload nginx
-curl -skI --resolve ${DFSP_FQDN}:443:${WAF_IP} https://${DFSP_FQDN}/ping
-# HTTP/2 405
-echo | openssl s_client -servername ${DFSP_FQDN} -connect ${WAF_IP}:443 2&gt;/dev/null \
-  | openssl x509 -noout -ext subjectAltName
-# SAN = wildcard zone, pas cbs.bftlabs.org
-</code></pre>
-        <p>Ne pas router <code>*.ext.<HUB_DOMAIN></code> vers OpenCBS.</p>
-
-        <h3>Callbacks MCM</h3>
-        <p>Tous les <code>FSPIOP_CALLBACK_URL_*</code> = <code>https://${DFSP_FQDN}</code>.</p>
-        <ul class="check">
-          <li>Interdit : <code>http://</code> (301 → POST quote 400 → Hub 1001).</li>
-          <li>Interdit : IP SDK, port outbound, suffixe <code>/quotes</code>.</li>
-        </ul>
-
-        <h3>Alias ALS</h3>
-<pre><code># ops@mojaloop
-kubectl -n mojaloop port-forward svc/moja-alias-oracle 3001:3001
-curl -sS http://127.0.0.1:3001/mappings | jq .
-# DELETE /mappings/&lt;id&gt; si l’alias change de FSP
-# un alias = un seul FSP
-</code></pre>
-
-        <h3>Tests (ordre)</h3>
-<pre><code># lookup depuis un DFSP déjà onboardé (ex. <fspid> outbound :6001)
-curl -sS "http://${SDK_HOST}:6001/parties/ALIAS/&lt;ALIAS_PAYEE&gt;"
-# fspId = ${DFSP_ID}
-
-curl -sS -X POST "http://${SDK_HOST}:6001/transfers" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "homeTransactionId": "onboard-'"$(date +%s)"'",
-    "from": { "displayName": "PAYER", "idType": "ALIAS", "idValue": "&lt;ALIAS_PAYER&gt;" },
-    "to":   { "idType": "ALIAS", "idValue": "&lt;ALIAS_PAYEE&gt;" },
-    "amountType": "SEND", "currency": "XOF", "amount": "100",
-    "transactionType": "TRANSFER", "note": "onboarding", "channel": "mobile_app"
-  }'
-# currentState COMPLETED, fulfil COMMITTED
-</code></pre>
-        <p>Quote 1001 : MCM encore en <code>http://</code>, ou callback vers IP SDK. GET parties peut passer (suit le 301), POST quotes non.</p>
-      </section>
-
-      <section id="mono-helm" class="section">
-        <h2>Chart Helm <code>dfsp/</code> (Kubernetes)</h2>
-        <p>Voie toolkit pour un cluster participant : un namespace, Vault StatefulSet, mcm-agent, SDK + Service LoadBalancer inbound, Redis, simulateur optionnel. Le switch n’accède pas à ce cluster.</p>
-
-        <h3>Prérequis K8s</h3>
-        <ul class="check">
-          <li>Cluster ≥ 1.28, helm ≥ 3.12, kubectl, PVC (~1 GiB Vault), LoadBalancer (cloud ou MetalLB).</li>
-          <li>Du switch (hors bande) : <code>DFSP_ID</code>, secret OIDC, <code>MCM_SERVER_ENDPOINT</code>, <code>HUB_IAM_PROVIDER_URL</code>, <code>HUB_EXTAPI_FQDN</code>.</li>
-          <li>Un FQDN public contrôlé, joignable :443 depuis l’egress du switch.</li>
-        </ul>
-
-        <h3>Install</h3>
-<pre><code>kubectl create namespace dfsp-201
-kubectl -n dfsp-201 create secret generic dfsp-dfsp-auth \
-  --from-literal=clientSecret='&lt;secret-switch&gt;'
-
-# my-dfsp-values.yaml
-# dfsp.id / dfsp.fqdn / dfsp.currencies
-# hub.mcmServerEndpoint, hub.iamProviderUrl, hub.extapiFqdn
-# backend.useSimulator: false
-# backend.endpoint: http://my-cbs.cbs-namespace.svc.cluster.local:8080
-
-helm install dfsp /chemin/ml-deployment-toolkit/dfsp \
-  -n dfsp-201 -f my-dfsp-values.yaml
-
-kubectl -n dfsp-201 wait --for=condition=complete \
-  job/dfsp-dfsp-201-vault-init --timeout=5m
-
-kubectl -n dfsp-201 get secret dfsp-vault-recovery-kit -o yaml \
-  &gt; ~/secure-storage/dfsp-201-recovery-kit-$(date +%Y%m%d).yaml
-</code></pre>
-        <p>Pointer le DNS <code>DFSP_FQDN</code> sur l’IP LoadBalancer <code>sdk-inbound</code>. UI agent / metrics : <code>kubectl port-forward</code> (ClusterIP).</p>
-<pre><code>kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-mcm-agent 3000:3000
-kubectl -n dfsp-201 port-forward svc/dfsp-dfsp-201-sdk-internal 4040:4040
-</code></pre>
-        <p>Le chart n’active pas l’overlay. Pour N DFSPs en Helm : N releases / N namespaces, analogue à N Compose.</p>
-      </section>
-
-      <section id="mono-vault-reboot" class="section">
-        <div class="badges">
-          <span class="badge">ops</span>
-          <span class="badge">Compose 1:1</span>
-        </div>
-        <h2>Après reboot — unseal Vault (nœud SDK)</h2>
-        <p class="lead">Sur le nœud Docker (<code>&lt;SDK_HOST&gt;</code>), chaque DFSP a son Vault fichier (<code>sdk-vault-&lt;fspid&gt;</code>). Au reboot de la VM (ou restart du démon Docker), Vault redémarre <strong>sealed</strong>. Le job <code>vault-init</code> a <code>restart: "no"</code> : il ne se relance pas seul. L’agent crash alors avec <code>Vault is sealed</code>.</p>
-        <div class="warn">
-          Ne <strong>pas</strong> faire <code>docker volume rm …vault-data…</code> ni <code>vault operator init</code> à nouveau : les clés / role-id sont déjà dans le volume <code>vault-creds</code>. Un wipe détruit la CA et les secrets PM4ML du DFSP.
-        </div>
-
-        <h3>1. Symptômes</h3>
-        <table>
-          <tr><th>Observé</th><th>Cause</th></tr>
-          <tr><td><code>mcm-agent-&lt;fspid&gt;</code> Restarting / unhealthy</td><td>AppRole impossible tant que Vault est sealed</td></tr>
-          <tr><td>Logs agent : <code>Failed to start MCM Agent: Vault is sealed</code></td><td>Attend unseal</td></tr>
-          <tr><td><code>sdk-vault-&lt;fspid&gt;</code> Up, mais <code>Sealed true</code></td><td>Normal après reboot sans vault-init</td></tr>
-          <tr><td><code>sdk-vault-init-&lt;fspid&gt;</code> Exited (souvent depuis le 1er boot)</td><td>Attendu : <code>restart: "no"</code></td></tr>
-        </table>
-<pre><code># sur &lt;SDK_HOST&gt;
-docker ps -a --format 'table {{.Names}}\t{{.Status}}' | grep -E 'vault|mcm-agent'
-docker logs mcm-agent-&lt;fspid&gt; --tail 30
-</code></pre>
-
-        <h3>2. Confirmer sealed</h3>
-<pre><code>for v in $(docker ps --format '{{.Names}}' | grep -E '^sdk-vault-' | grep -v init); do
-  echo "===== $v ====="
-  docker exec "$v" vault status 2&gt;/dev/null | grep -E 'Initialized|Sealed|Version' \
-    || echo "(exec failed)"
-done
-# Attendu juste après reboot : Initialized true · Sealed true
-</code></pre>
-
-        <h3>3. Relancer vault-init (unseal)</h3>
-        <p>Le script monté dans <code>vault-init</code> lit les unseal keys déjà écrites dans <code>vault-creds</code>, unseal, puis réécrit role-id / secret-id si besoin. Exit 0 = OK.</p>
-<pre><code># Lister les jobs présents (DFSPs déjà déployés sur le nœud)
-docker ps -a --format '{{.Names}}' | grep vault-init | sort
-
-# Un DFSP
-docker start sdk-vault-init-&lt;fspid&gt;
-docker logs -f sdk-vault-init-&lt;fspid&gt;
-# Ctrl-C quand exit ; Status doit finir par Exited (0)
-
-# Tous les DFSPs actifs du nœud d’un coup
-docker ps -a --format '{{.Names}}' | grep vault-init | xargs -r docker start
-sleep 5
-docker ps -a --filter name=vault-init --format 'table {{.Names}}\t{{.Status}}'
-</code></pre>
-        <p>Via Compose / <code>manage.sh</code> (répertoire deploy du DFSP) :</p>
-<pre><code>cd "$DEPLOY"   # …/sdk-scheme-adapter/deploy du DFSP
-unset AUTH_CLIENT_ID AUTH_CLIENT_SECRET COMPOSE_PROJECT_NAME
-./manage.sh up -d vault-init
-./manage.sh logs vault-init --tail 40
-# ou : docker start sdk-vault-init-${DFSP_ID}
-</code></pre>
-
-        <h3>4. Vérifier</h3>
-<pre><code># Sealed false sur chaque Vault actif
-for v in $(docker ps --format '{{.Names}}' | grep -E '^sdk-vault-' | grep -v init); do
-  echo -n "$v → "
-  docker exec "$v" vault status 2&gt;/dev/null | grep Sealed || echo "?"
-done
-
-# Agents qui se stabilisent (healthy / Up sans restart loop)
-docker ps --format 'table {{.Names}}\t{{.Status}}' | grep mcm-agent
-
-# Spot-check un agent
-docker logs mcm-agent-&lt;fspid&gt; --tail 20
-# plus de « Vault is sealed »
-</code></pre>
-        <ul class="check">
-          <li><code>Sealed false</code> sur chaque <code>sdk-vault-&lt;fspid&gt;</code> utile.</li>
-          <li><code>mcm-agent-&lt;fspid&gt;</code> healthy ; websocket <code>:4004</code> OK pour le SDK.</li>
-          <li>SDK 1:1 ou overlay : pas de restart agent en boucle.</li>
-        </ul>
-
-        <h3>Si vault-init échoue</h3>
-        <table>
-          <tr><th>Erreur</th><th>Action</th></tr>
-          <tr><td><code>permission denied</code> sur <code>/vault/data</code></td><td>chown UID du compose (souvent <code>100:100</code>) sur volumes data/creds — voir <a href="#mono-deploy">Déploiement Compose</a>, puis <code>docker start</code> à nouveau</td></tr>
-          <tr><td><code>No such container</code></td><td>Le stack a été <code>rm</code> : <code>./manage.sh up -d vault vault-init …</code> depuis le deploy</td></tr>
-          <tr><td>Vault <code>Initialized false</code></td><td>Volume data perdu — re-init = nouveau DFSP côté secrets ; récupérer un backup creds si possible</td></tr>
-          <tr><td>Agent sealed alors que Vault OK</td><td>Attendre healthcheck / <code>docker restart mcm-agent-&lt;fspid&gt;</code></td></tr>
-        </table>
-        <div class="ctx">
-          <strong>Hub (ml-test) ≠ Vault DFSP</strong>
-          Le Vault Raft du switch (<code>vault-0</code>…, unseal 5/3) est documenté sous <a href="#risques-ops">Runbook overlay</a>. Ici : uniquement les Vaults Compose du nœud SDK.
-        </div>
-      </section>
-
       <section id="fonctionnement" class="section">
         <h2>Fonctionnement overlay</h2>
         <p>Le SDK officiel n’a qu’un websocket PM4ML. Un <code>CONFIGURATION.NOTIFY</code> déclenche un <code>restart()</code> global incompatible avec N DFSPs dans le même process.</p>
@@ -1584,7 +1273,7 @@ docker logs mcm-agent-&lt;fspid&gt; --tail 20
 
       <section id="deploiement" class="section">
         <h2>Guide de déploiement overlay</h2>
-        <p>Procédure <strong>générique</strong> (placeholders). Les IPs / tenants du lab (zone <HUB_DOMAIN>) sont en bas, rubrique <em>Contexte actuel</em>. Pour un DFSP neuf en 1:1, commencer par <a href="#mono-deploy">Déploiement Compose</a>.</p>
+        <p>Procédure <strong>générique</strong> (placeholders). Les IPs / tenants du lab (zone <HUB_DOMAIN>) sont en bas, rubrique <em>Contexte actuel</em>. Pour un DFSP neuf en SDK dédié, suivre <a href="#workflow">Workflow</a>.</p>
         <p>Image : <code>sdk-scheme-adapter-multi-dfsp</code> (<code>FROM mojaloop/sdk-scheme-adapter:v24.9.0</code> + overlay). Conteneur et réseau Docker : <code>sdk-fececam</code>. Les agents restent dans leurs stacks.</p>
 
         <h3>1. Fichier <code>lab/.env</code></h3>
