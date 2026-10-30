@@ -1567,7 +1567,7 @@ docker ps --filter name=sdk-scheme-adapter-${DFSP_ID}
           <tr><td><code>central_ledger</code></td><td>Selon le mode ci-dessus</td></tr>
           <tr><td>Oracles</td><td><code>oracle_msisdn</code>, <code>oracle_alias</code> (sauf <code>--skip-oracle</code> ou mode période)</td></tr>
           <tr><td>Redis <code>--redis</code></td><td>Clés <code>ttk-redis</code> contenant le nom du DFSP</td></tr>
-          <tr><td>Mongo <code>--mongo-purge</code></td><td>Vidage <strong>global</strong> de <code>mlos</code>, <code>ttk</code>, <code>reporting_events</code></td></tr>
+          <tr><td>Mongo <code>--mongo-purge</code></td><td>Vidage <strong>global</strong> de <code>mlos</code>, <code>ttk</code>, <code>reporting_events</code>. Le finance-portal lit <code>reporting_events.transaction</code> : un <code>--reset</code> ledger seul ne vide pas l’UI. Pour un filtre par date / DFSP : procédure ci-dessous.</td></tr>
           <tr><td>Kafka <code>--kafka-purge</code></td><td>Topics Strimzi <code>^topic-</code> (pas par DFSP)</td></tr>
         </table>
         <p>Cible lab : namespace <code>mojaloop</code> (Deployments), <code>data</code> (PXC <code>mojaloop-db-pxc-0</code> / conteneur <code>pxc</code>). Mot de passe root : secret <code>data/mojaloop-db-secrets</code>, clé <code>root</code>. Chart Mojaloop 17.2.0 / central-ledger v19.12.7.</p>
@@ -1634,6 +1634,50 @@ kubectl -n data exec -i mojaloop-db-pxc-0 -c pxc -- \
           <strong>Transferts ouverts</strong>
           S’il reste des états <code>RESERVED</code> / <code>RECEIVED_*</code> (dans la période si <code>--since/--until</code>), <code>--execute</code> est refusé sauf <code>--allow-inflight</code> (alors <code>reservedValue</code> des survivants n’est pas recalculé). Préférer <code>--scale-down</code> et attendre la finalisation.
         </div>
+        <h3>Finance Portal — historique Mongo filtré</h3>
+        <p>Après un <code>--reset</code> ledger, l’écran Transfers du finance-portal peut encore montrer l’ancien historique : il lit Mongo <code>reporting_events.transaction</code> (<code>createdAt</code>, <code>payerDFSP</code>, <code>payeeDFSP</code>). <code>--mongo-purge</code> vide <strong>tout</strong> ; pour ne supprimer que les lignes d’une liste de DFSP <strong>avant</strong> une date (ex. garder à partir du 18/10/2026) :</p>
+        <div class="warn">
+          <strong>Auth + primary</strong>
+          Utiliser l’utilisateur <code>reporting</code> (secret <code>data/bulk-mongodb-app-secrets</code>, clé <code>MONGODB_APP_PASSWORD</code>, <code>--authenticationDatabase reporting_events</code>). <code>clusterMonitor</code> et souvent <code>clusterAdmin</code> n’ont pas le droit d’écrire. Les <code>deleteMany</code> doivent s’exécuter sur le <strong>primary</strong> du replica set (<code>not primary</code> si le pod est un secondary).
+        </div>
+<pre><code>MU=reporting
+MP=$(kubectl -n data get secret bulk-mongodb-app-secrets -o jsonpath='{.data.MONGODB_APP_PASSWORD}' | base64 -d)
+
+# Primary (exemple de sortie : bulk-mongodb-rs0-1.… → pod bulk-mongodb-rs0-1)
+kubectl -n data exec -c mongod bulk-mongodb-rs0-0 -- \
+  mongosh --quiet -u "$MU" -p "$MP" --authenticationDatabase reporting_events \
+  --eval 'print(db.hello().primary)'
+
+# Comptage — adapter la date de coupure et la liste DFSP
+kubectl -n data exec -c mongod bulk-mongodb-rs0-1 -- \
+  mongosh --quiet -u "$MU" -p "$MP" --authenticationDatabase reporting_events --eval '
+    const d = db.getSiblingDB("reporting_events");
+    const cut = ISODate("2026-10-18T00:00:00Z");
+    const dfsps = ["clcam-jardins-test","clcam-calavi-test","gto","cmcalavi","moov","mtn"];
+    const q = {
+      createdAt: { $lt: cut },
+      $or: [ { payerDFSP: { $in: dfsps } }, { payeeDFSP: { $in: dfsps } } ]
+    };
+    print("à supprimer (&lt; cut, DFSP listés): " + d.transaction.countDocuments(q));
+    print("à conserver (&gt;= cut, tous): " + d.transaction.countDocuments({ createdAt: { $gte: cut } }));
+    print("total: " + d.transaction.countDocuments({}));
+  '
+
+# Delete — même pod primary, même filtre
+kubectl -n data exec -c mongod bulk-mongodb-rs0-1 -- \
+  mongosh --quiet -u "$MU" -p "$MP" --authenticationDatabase reporting_events --eval '
+    const d = db.getSiblingDB("reporting_events");
+    const cut = ISODate("2026-10-18T00:00:00Z");
+    const dfsps = ["clcam-jardins-test","clcam-calavi-test","gto","cmcalavi","moov","mtn"];
+    const q = {
+      createdAt: { $lt: cut },
+      $or: [ { payerDFSP: { $in: dfsps } }, { payeeDFSP: { $in: dfsps } } ]
+    };
+    printjson(d.transaction.deleteMany(q));
+    print("restant: " + d.transaction.countDocuments({}));
+  '
+</code></pre>
+        <p>Remplacer <code>bulk-mongodb-rs0-1</code> par le pod primary réel. Coupure inclusive côté conservation : <code>createdAt &gt;= cut</code> reste. Rafraîchir le finance-portal après le delete. Collections voisines (<code>settlement</code>, <code>reporting</code>, <code>states</code>) : même logique si l’UI en affiche encore.</p>
         <h3>Hors script</h3>
         <ul class="check">
           <li>Après <code>--reset</code> <em>sans</em> période : reprovisionner les alias ALS / oracle. Comptes et endpoints Hub déjà là. Pour retirer des alias <strong>sans</strong> toucher le ledger : <a href="#hub-purge-alias">purge alias</a>.</li>
