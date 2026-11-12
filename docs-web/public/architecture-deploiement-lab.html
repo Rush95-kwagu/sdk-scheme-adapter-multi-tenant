@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Architecture du déploiement lab Mojaloop</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 20mm 16mm;
+      @top-left {
+        content: "Scheme Mojaloop  ·  Lab openmfi.org";
+        font-size: 8.5pt;
+        color: #5c5854;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      @top-right {
+        content: "Confidentiel exploitation";
+        font-size: 8.5pt;
+        color: #5c5854;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      @bottom-left {
+        content: "Hub  ·  WAF  ·  Proxmox  ·  DFSP SDK";
+        font-size: 8pt;
+        color: #7a756e;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      @bottom-right {
+        content: "p. " counter(page) " / " counter(pages);
+        font-size: 8pt;
+        color: #7a756e;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      color: #1c1c1c;
+      background: #fff;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 10.2pt;
+      line-height: 1.45;
+    }
+    header.cover {
+      border-bottom: 3px solid #1a4d3c;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+    }
+    .kicker {
+      color: #1a4d3c;
+      font-size: 9pt;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+    h1 {
+      font-size: 20pt;
+      line-height: 1.2;
+      margin: 0 0 8px;
+      font-weight: 700;
+      color: #143d30;
+    }
+    .meta {
+      color: #6b6762;
+      font-size: 9.5pt;
+      margin: 0;
+    }
+    h2 {
+      font-size: 12pt;
+      color: #1a4d3c;
+      margin: 18px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #dceee6;
+    }
+    p { margin: 0 0 8px; }
+    .lead { font-size: 11pt; color: #333; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 12px;
+      font-size: 9pt;
+    }
+    th, td {
+      border: 1px solid #d4cfc6;
+      padding: 6px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: #1a4d3c;
+      color: #fff;
+      font-weight: 600;
+    }
+    tr:nth-child(even) td { background: #f7f5f1; }
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 8.4pt;
+      background: #eef3f0;
+      padding: 0.05em 0.28em;
+    }
+    pre {
+      background: #1e2a25;
+      color: #e8f0ec;
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 8pt;
+      line-height: 1.4;
+      padding: 12px 14px;
+      margin: 8px 0 12px;
+      white-space: pre;
+    }
+    .callout {
+      border-left: 4px solid #9a5b12;
+      background: #f6ecd9;
+      padding: 8px 12px;
+      margin: 10px 0 12px;
+      font-size: 9.4pt;
+    }
+    .callout.info {
+      border-left-color: #1a4d3c;
+      background: #e7f1ec;
+    }
+    .callout strong { display: block; margin-bottom: 3px; }
+    ul { margin: 4px 0 10px 18px; padding: 0; }
+    li { margin: 0 0 4px; }
+  </style>
+</head>
+<body>
+  <header class="cover">
+    <p class="kicker">Documentation d'exploitation</p>
+    <h1>Architecture du déploiement actuel</h1>
+    <p class="meta">Lab Mojaloop · zone openmfi.org · 12 novembre 2026<br />
+    WAF-AGG · VM moja (Proxmox) · clusters ml-cc / ml-test · nœud SDK Docker</p>
+  </header>
+
+  <p class="lead">Ce document décrit la topologie physique et logique du lab tel qu'il tourne aujourd'hui : un WAF en bordure, une VM <code>moja</code> qui porte Proxmox, Terraform, Talos et Kea DHCP4, deux clusters Kubernetes dont les IP sont distribuées par DHCP, et une VM Docker dédiée aux toolkits DFSP onboardés.</p>
+
+  <h2>1. Couches</h2>
+  <table>
+    <tr><th>Couche</th><th>Nom</th><th>Rôle</th></tr>
+    <tr><td>Bordure</td><td>WAF (WAF-AGG)</td><td>TLS public :443, nginx, DNS *.ext.openmfi.org. Point d'entrée unique du Hub et des FQDN DFSP.</td></tr>
+    <tr><td>Hyperviseur</td><td>VM moja</td><td>Proxmox VE. Héberge Terraform, Talos, le DHCP Kea, les VM de clusters et la VM SDK.</td></tr>
+    <tr><td>IaC / OS cluster</td><td>Terraform + Talos + Flux</td><td>Crée et pilote les clusters Kubernetes ml-cc et ml-test.</td></tr>
+    <tr><td>Adressage</td><td>Kea DHCP4 (CT 101)</td><td>Distribue dynamiquement les IP des VM de clusters (réservations MAC pour les nœuds stables).</td></tr>
+    <tr><td>Control Center</td><td>cluster ml-cc</td><td>Harbor, MinIO, Vault hub, observabilité. Kubeconfig : /opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig</td></tr>
+    <tr><td>Switch</td><td>cluster ml-test</td><td>Mojaloop (ledger, ALS, quoting, transfers), MCM, Hydra, PXC, Mongo reporting. Kubeconfig : /opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig</td></tr>
+    <tr><td>Participants</td><td>VM SDK cmcalavi-sdk-node</td><td>Docker : un toolkit par DFSP (sdk-scheme-adapter, mcm-agent, Vault). IP 172.25.2.117.</td></tr>
+  </table>
+
+  <h2>2. Schéma</h2>
+<pre>Internet  (zone openmfi.org)
+    |
+    |  HTTPS :443, noms *.ext.openmfi.org
+    v
+WAF-AGG  (nginx, certificats, reverse-proxy)
+    |
+    |  LAN 172.16.2.0/24  et  172.25.2.0/24  (vmbr0)
+    v
+VM moja  (Proxmox VE)
+    |-- Terraform / Talos / Flux
+    |-- CT Kea DHCP4 (id 101)     IP dynamiques + réservations MAC
+    |-- VM cluster ml-cc          Control Center
+    |-- VM cluster ml-test        Switch Mojaloop (MCM, ledger, ALS)
+    `-- VM SDK 106  cmcalavi-sdk-node  172.25.2.117
+            Docker Compose par DFSP :
+              sdk-vault-*  +  vault-init
+              mcm-agent-*
+              sdk-scheme-adapter-*
+              redis  (+ simulateur si profil simulator)</pre>
+
+  <h2>3. Réseau</h2>
+  <table>
+    <tr><th>Objet</th><th>Valeur lab</th></tr>
+    <tr><td>Pont Proxmox</td><td>vmbr0, multi-home 172.16.2.0/24 et 172.25.2.0/24</td></tr>
+    <tr><td>Nœud SDK</td><td>172.25.2.117, MAC réservée Kea BC:24:11:69:27:47</td></tr>
+    <tr><td>FSPIOP Hub (extra_hosts)</td><td>extapi.openmfi.org vers 172.16.2.28</td></tr>
+    <tr><td>Hydra / MCM (extra_hosts)</td><td>41.214.65.90</td></tr>
+    <tr><td>DNS public des FQDN DFSP</td><td>IP publique du WAF, jamais 172.25.2.117</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Le Hub n'appelle jamais le nœud SDK</strong>
+    Les callbacks FSPIOP vont vers https://&lt;fspid&gt;.ext.openmfi.org (WAF). Le CBS ou un test outbound vise http://172.25.2.117:XX01 (port SDK outbound), sans préfixe /&lt;fspid&gt; sur un stack 1:1.
+  </div>
+
+  <h2>4. Flux</h2>
+  <table>
+    <tr><th>Sens</th><th>Chemin</th></tr>
+    <tr><td>Hub vers DFSP (inbound)</td><td>Pod Mojaloop vers https://FQDN, WAF :443, nginx proxy_pass vers 172.25.2.117:XX00 (conteneur SDK 5000)</td></tr>
+    <tr><td>DFSP vers Hub (outbound)</td><td>CBS ou curl vers 172.25.2.117:XX01 (conteneur 5001), puis mTLS vers extapi.openmfi.org</td></tr>
+    <tr><td>Agent vers Hub (enrolment)</td><td>mcm-agent vers Hydra (jeton) et MCM (pm4mlapi) ; certificats dans le Vault du DFSP</td></tr>
+    <tr><td>Opérateur Hub</td><td>kubectl avec le kubeconfig ml-test (ledger, oracles) ou ml-cc (tooling)</td></tr>
+  </table>
+
+  <h2>5. Qui travaille où</h2>
+  <table>
+    <tr><th>Machine</th><th>Accès typique</th><th>Travaux</th></tr>
+    <tr><td>WAF</td><td>ssh ops@WAF-AGG</td><td>vhosts nginx, ping vers le SDK, certificats</td></tr>
+    <tr><td>Hyperviseur</td><td>UI / SSH Proxmox sur moja</td><td>VM, pont vmbr0, CT Kea</td></tr>
+    <tr><td>DHCP</td><td>CT 101, /etc/kea/kea-dhcp4.conf</td><td>réservations MAC des nœuds Talos et du SDK</td></tr>
+    <tr><td>Switch</td><td>ops@mojaloop, kubeconfig ml-test</td><td>purge ledger, alias oracle, MCM</td></tr>
+    <tr><td>Nœud SDK</td><td>ssh sdk@172.25.2.117</td><td>just ports, ./manage.sh, unseal Vault, tests outbound</td></tr>
+  </table>
+  <div class="callout info">
+    <strong>Deux kubeconfig</strong>
+    Les scripts mojaloop-purge-dfsp.sh et mojaloop-purge-alias.sh ciblent le PXC du switch : export KUBECONFIG=/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig. Ne pas utiliser le kubeconfig ml-cc pour le ledger.
+  </div>
+
+  <h2>6. Ports SDK (rappel)</h2>
+  <table>
+    <tr><th>Usage</th><th>Hote</th><th>Conteneur</th></tr>
+    <tr><td>Inbound (WAF)</td><td>XX00</td><td>5000</td></tr>
+    <tr><td>Outbound (CBS / tests)</td><td>XX01</td><td>5001</td></tr>
+    <tr><td>UI mcm-agent</td><td>XX03</td><td>5000</td></tr>
+    <tr><td>Simulateur</td><td>XX04</td><td>3003</td></tr>
+    <tr><td>Metrics</td><td>XX40</td><td>5040</td></tr>
+  </table>
+  <p>Le port 4004 reste interne à Docker (websocket agent vers SDK). Il n'est pas publié sur le WAF. Le TLS inbound s'arrête sur le WAF (mTLS inbound SDK à false ; mTLS outbound vers le Hub à true).</p>
+</body>
+</html>
