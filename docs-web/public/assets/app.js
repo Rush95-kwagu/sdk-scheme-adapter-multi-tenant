@@ -191,7 +191,6 @@
     if (section) {
       ensureHeadingIds(section);
       buildToc(section);
-      renderMermaid(section);
     }
     closeNav();
     if (headingEl) {
@@ -285,35 +284,7 @@
     wrap.appendChild(table);
   });
 
-  function renderMermaid(section) {
-    if (typeof mermaid === "undefined" || !section) return;
-    const nodes = section.querySelectorAll("pre.mermaid");
-    if (!nodes.length) return;
-    mermaid.run({ nodes: Array.from(nodes) }).catch(() => {});
-  }
-
-  if (typeof mermaid !== "undefined") {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "base",
-      securityLevel: "loose",
-      themeVariables: {
-        primaryColor: "#e7f1ec",
-        primaryTextColor: "#143d30",
-        primaryBorderColor: "#1a4d3c",
-        lineColor: "#2f6b54",
-        secondaryColor: "#e9edf7",
-        tertiaryColor: "#f6ecd9",
-        clusterBkg: "#fbfaf8",
-        clusterBorder: "#d3e4db",
-        fontFamily: "ui-sans-serif, system-ui, sans-serif",
-      },
-      flowchart: { htmlLabels: true, curve: "basis", padding: 12 },
-    });
-  }
-
   document.querySelectorAll("main pre").forEach((pre) => {
-    if (pre.classList.contains("mermaid")) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "copy-btn";

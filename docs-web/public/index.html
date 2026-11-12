@@ -151,7 +151,7 @@
         </div>
         <h2>Hub : déploiement actuel</h2>
         <p class="lead">Topologie physique et logique du lab tel qu’il tourne aujourd’hui : un WAF en bordure, une VM <code>moja</code> qui porte Proxmox, Terraform, Talos et Kea DHCP4, deux clusters Kubernetes (<code>ml-cc</code>, <code>ml-test</code>) dont les IP sont distribuées par DHCP, et une VM Docker dédiée aux toolkits DFSP.</p>
-        <p>PDF de cette rubrique : <a href="architecture-deploiement-lab.pdf">architecture-deploiement-lab.pdf</a>.</p>
+        <p>PDF de cette rubrique (y compris les deux schémas) : <a href="architecture-deploiement-lab.pdf">architecture-deploiement-lab.pdf</a>.</p>
 
         <h3>Couches</h3>
         <table>
@@ -166,55 +166,15 @@
         </table>
 
         <h3>Schéma</h3>
-        <p>Vue graphique (Mermaid). Le Hub n'appelle jamais l'IP du nœud SDK : les callbacks passent par le WAF.</p>
-        <div class="diagram" role="img" aria-label="Topologie lab : Internet, WAF, VM moja, clusters et SDK">
-<pre class="mermaid">
-flowchart TB
-  Internet["Internet / DNS openmfi.org"]
-  WAF["WAF-AGG\nnginx TLS :443"]
-
-  subgraph moja["VM moja  ·  Proxmox VE"]
-    TF["Terraform + Talos + Flux"]
-    Kea["CT 101  ·  Kea DHCP4"]
-    subgraph cc["cluster ml-cc"]
-      CC["Harbor, MinIO, Vault hub,\nobservabilité"]
-    end
-    subgraph sw["cluster ml-test"]
-      HUB["Mojaloop, MCM, Hydra,\nPXC, ALS, quoting"]
-    end
-    subgraph sdk["VM SDK 106  ·  172.25.2.117"]
-      DK["Docker par DFSP\nvault + mcm-agent + sdk"]
-    end
-  end
-
-  Internet -->|"HTTPS *.ext.openmfi.org"| WAF
-  WAF -->|"LAN 172.16.2.0/24"| HUB
-  WAF -->|"LAN 172.25.2.0/24 :XX00"| DK
-  TF --> cc
-  TF --> sw
-  Kea -.->|"IP DHCP + MAC"| cc
-  Kea -.->|"IP DHCP + MAC"| sw
-  Kea -.->|"MAC BC:24:11:69:27:47"| sdk
-</pre>
-        </div>
-        <div class="diagram" role="img" aria-label="Flux inbound Hub vers DFSP et outbound DFSP vers Hub">
-<pre class="mermaid">
-flowchart LR
-  subgraph inb["Inbound  ·  Hub vers DFSP"]
-    P["Pod Mojaloop"]
-    FQ["https://fspid.ext.openmfi.org"]
-    N["nginx WAF"]
-    I["SDK :XX00 / conteneur 5000"]
-    P --> FQ --> N --> I
-  end
-  subgraph outb["Outbound  ·  DFSP vers Hub"]
-    CBS["CBS ou curl"]
-    O["SDK :XX01 / conteneur 5001"]
-    E["extapi.openmfi.org\n172.16.2.28  mTLS"]
-    CBS --> O --> E
-  end
-</pre>
-        </div>
+        <p>Le Hub n'appelle jamais l'IP du nœud SDK : les callbacks passent par le WAF.</p>
+        <figure class="diagram">
+          <img src="assets/schema-topologie.png" alt="Topologie lab : Internet, WAF-AGG, VM moja (Proxmox), Kea DHCP4, clusters ml-cc et ml-test, VM SDK 172.25.2.117" />
+          <figcaption>Topologie : WAF, VM moja, DHCP, clusters Hub et nœud SDK.</figcaption>
+        </figure>
+        <figure class="diagram">
+          <img src="assets/schema-flux.png" alt="Flux outbound DFSP vers Hub et inbound Hub vers DFSP via le WAF" />
+          <figcaption>Flux : outbound (CBS vers extapi) et inbound (Hub vers FQDN puis SDK).</figcaption>
+        </figure>
 <pre><code>Internet  (zone openmfi.org)
     |
     |  HTTPS :443, noms *.ext.openmfi.org
@@ -2384,7 +2344,6 @@ docker compose up -d
       </div>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>

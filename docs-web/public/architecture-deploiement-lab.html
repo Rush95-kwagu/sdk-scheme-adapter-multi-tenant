@@ -126,6 +126,24 @@
     .callout strong { display: block; margin-bottom: 3px; }
     ul { margin: 4px 0 10px 18px; padding: 0; }
     li { margin: 0 0 4px; }
+    figure.schema {
+      margin: 10px 0 14px;
+      padding: 0;
+      page-break-inside: avoid;
+    }
+    figure.schema img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid #d4cfc6;
+    }
+    figure.schema figcaption {
+      font-size: 9pt;
+      color: #6b6762;
+      text-align: center;
+      margin: 6px 0 0;
+    }
+    h2.schema-start { page-break-before: always; }
   </style>
 </head>
 <body>
@@ -150,7 +168,15 @@
     <tr><td>Participants</td><td>VM SDK cmcalavi-sdk-node</td><td>Docker : un toolkit par DFSP (sdk-scheme-adapter, mcm-agent, Vault). IP 172.25.2.117.</td></tr>
   </table>
 
-  <h2>2. Schéma</h2>
+  <h2 class="schema-start">2. Schéma</h2>
+  <figure class="schema">
+    <img src="assets/schema-topologie.png" alt="Topologie lab : WAF, VM moja, clusters et SDK" />
+    <figcaption>Figure 1. Topologie : WAF, VM moja, DHCP, clusters Hub et nœud SDK.</figcaption>
+  </figure>
+  <figure class="schema">
+    <img src="assets/schema-flux.png" alt="Flux outbound et inbound" />
+    <figcaption>Figure 2. Flux : outbound (CBS vers extapi) et inbound (Hub vers FQDN puis SDK).</figcaption>
+  </figure>
 <pre>Internet  (zone openmfi.org)
     |
     |  HTTPS :443, noms *.ext.openmfi.org
