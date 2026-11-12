@@ -613,6 +613,26 @@ ul.check li, ol.steps li { margin: 0.4rem 0; padding-left: 0.15rem; }
 }
 .flow .arrow { color: var(--muted); font-size: 0.85rem; }
 
+.diagram {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 0.7rem;
+  margin: 0 0 1.35rem;
+  overflow-x: auto;
+}
+.diagram pre.mermaid {
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  overflow: visible;
+}
+.diagram pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .pager {
   display: flex;
   justify-content: space-between;

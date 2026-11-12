@@ -110,7 +110,7 @@
             <tr><th>Nom</th><th>Rôle</th><th>Exemple (ne pas copier tel quel en prod)</th></tr>
             <tr><td><code>&lt;fspid&gt;</code></td><td>Nom ledger <code>participant.name</code></td><td><code>dfsp-a</code>, <code>dfsp-b</code></td></tr>
             <tr><td><code>&lt;SDK_HOST&gt;</code></td><td>Nœud Docker SDK</td><td><code>192.0.2.117</code></td></tr>
-            <tr><td><code>&lt;WAF_WAN&gt;</code></td><td>IP publique WAF</td><td><code>203.0.113.90</code></td></tr>
+            <tr><td><code>&lt;WAF_WAN&gt;</code></td><td>IP publique WAF</td><td><code>IP_WAF : XX.XX.XX.XX</code></td></tr>
             <tr><td><code>&lt;KUBE_API_VIP&gt;</code></td><td>VIP API Kubernetes (switch)</td><td><code>192.0.2.25</code></td></tr>
             <tr><td><code>&lt;HUB_EXTAPI&gt;</code></td><td>FSPIOP Hub</td><td><code>192.0.2.28</code></td></tr>
             <tr><td><code>&lt;HUB_HYDRA&gt;</code></td><td>Hydra / MCM (gw-ext)</td><td><code>192.0.2.26</code></td></tr>
@@ -166,16 +166,54 @@
         </table>
 
         <h3>Schéma</h3>
-        <div class="flow">
-          <div class="box">Internet / DNS</div><span class="arrow">→</span>
-          <div class="box">WAF-AGG :443</div><span class="arrow">→</span>
-          <div class="box">VM moja (Proxmox)</div>
+        <p>Vue graphique (Mermaid). Le Hub n'appelle jamais l'IP du nœud SDK : les callbacks passent par le WAF.</p>
+        <div class="diagram" role="img" aria-label="Topologie lab : Internet, WAF, VM moja, clusters et SDK">
+<pre class="mermaid">
+flowchart TB
+  Internet["Internet / DNS openmfi.org"]
+  WAF["WAF-AGG\nnginx TLS :443"]
+
+  subgraph moja["VM moja  ·  Proxmox VE"]
+    TF["Terraform + Talos + Flux"]
+    Kea["CT 101  ·  Kea DHCP4"]
+    subgraph cc["cluster ml-cc"]
+      CC["Harbor, MinIO, Vault hub,\nobservabilité"]
+    end
+    subgraph sw["cluster ml-test"]
+      HUB["Mojaloop, MCM, Hydra,\nPXC, ALS, quoting"]
+    end
+    subgraph sdk["VM SDK 106  ·  172.25.2.117"]
+      DK["Docker par DFSP\nvault + mcm-agent + sdk"]
+    end
+  end
+
+  Internet -->|"HTTPS *.ext.openmfi.org"| WAF
+  WAF -->|"LAN 172.16.2.0/24"| HUB
+  WAF -->|"LAN 172.25.2.0/24 :XX00"| DK
+  TF --> cc
+  TF --> sw
+  Kea -.->|"IP DHCP + MAC"| cc
+  Kea -.->|"IP DHCP + MAC"| sw
+  Kea -.->|"MAC BC:24:11:69:27:47"| sdk
+</pre>
         </div>
-        <div class="flow">
-          <div class="box">Kea DHCP4</div><span class="arrow">→</span>
-          <div class="box">VM ml-cc</div>
-          <div class="box">VM ml-test</div>
-          <div class="box">VM SDK 172.25.2.117</div>
+        <div class="diagram" role="img" aria-label="Flux inbound Hub vers DFSP et outbound DFSP vers Hub">
+<pre class="mermaid">
+flowchart LR
+  subgraph inb["Inbound  ·  Hub vers DFSP"]
+    P["Pod Mojaloop"]
+    FQ["https://fspid.ext.openmfi.org"]
+    N["nginx WAF"]
+    I["SDK :XX00 / conteneur 5000"]
+    P --> FQ --> N --> I
+  end
+  subgraph outb["Outbound  ·  DFSP vers Hub"]
+    CBS["CBS ou curl"]
+    O["SDK :XX01 / conteneur 5001"]
+    E["extapi.openmfi.org\n172.16.2.28  mTLS"]
+    CBS --> O --> E
+  end
+</pre>
         </div>
 <pre><code>Internet  (zone openmfi.org)
     |
@@ -204,7 +242,7 @@ VM moja  (Proxmox VE)
           <tr><td>Pont Proxmox</td><td><code>vmbr0</code>, multi-home <code>172.16.2.0/24</code> et <code>172.25.2.0/24</code></td></tr>
           <tr><td>Nœud SDK</td><td><code>172.25.2.117</code>, MAC réservée Kea <code>BC:24:11:69:27:47</code></td></tr>
           <tr><td>FSPIOP Hub (extra_hosts)</td><td><code>extapi.openmfi.org</code> → <code>172.16.2.28</code></td></tr>
-          <tr><td>Hydra / MCM (extra_hosts)</td><td><code>41.214.65.90</code></td></tr>
+          <tr><td>Hydra / MCM (extra_hosts)</td><td><code>IP_WAF : XX.XX.XX.XX</code></td></tr>
           <tr><td>DNS public des FQDN DFSP</td><td>IP publique du WAF, jamais <code>172.25.2.117</code></td></tr>
         </table>
         <div class="warn">
@@ -566,7 +604,7 @@ securityContext:
             <tr><th>Quoi</th><th>Valeur</th></tr>
             <tr><td>IP du nœud SDK (cible nginx)</td><td><code>172.25.2.117</code></td></tr>
             <tr><td>Zone DNS</td><td><code>openmfi.org</code></td></tr>
-            <tr><td><code>hydra</code> et <code>mcm</code> (extra_hosts)</td><td><code>41.214.65.90</code></td></tr>
+            <tr><td><code>hydra</code> et <code>mcm</code> (extra_hosts)</td><td><code>IP_WAF : XX.XX.XX.XX</code></td></tr>
             <tr><td><code>extapi</code> (extra_hosts)</td><td><code>172.16.2.28</code></td></tr>
             <tr><td>Template à copier</td><td><code>~/dfsp-toolkit-template/sdk-scheme-adapter</code></td></tr>
           </table>
@@ -746,7 +784,7 @@ ports:
   - "10340:5040"    # metrics
   - "10304:3003"    # simulateur
 </code></pre>
-        <div class="warn">Ne pas modifier <code>extra_hosts</code> (<code>41.214.65.90</code> et <code>172.16.2.28</code>). Ne pas ajouter de ligne <code>ports</code> pour <code>4004</code> : il est déjà en <code>expose</code>. Ne pas ajouter <code>PM4ML_MULTI_TENANT</code> ni <code>MULTI_DFSP</code>. Ne pas figer de sous-réseau Docker (<code>ipam</code> / <code>subnet</code>) : ça chevauche un autre DFSP.</div>
+        <div class="warn">Ne pas modifier <code>extra_hosts</code> (<code>IP_WAF : XX.XX.XX.XX</code> et <code>172.16.2.28</code>). Ne pas ajouter de ligne <code>ports</code> pour <code>4004</code> : il est déjà en <code>expose</code>. Ne pas ajouter <code>PM4ML_MULTI_TENANT</code> ni <code>MULTI_DFSP</code>. Ne pas figer de sous-réseau Docker (<code>ipam</code> / <code>subnet</code>) : ça chevauche un autre DFSP.</div>
         <p>Laisser tels quels dans le template : <code>INBOUND_MUTUAL_TLS_ENABLED</code> à <code>false</code> (le TLS s’arrête sur le WAF), <code>OUTBOUND_MUTUAL_TLS_ENABLED</code> à <code>true</code>, <code>PEER_ENDPOINT</code> et les autres endpoints Hub = <code>extapi.openmfi.org</code> sans <code>https://</code>. Les flags JWS du fichier sont ceux du boot ; l’agent les remplace ensuite. Ne pas les inventer.</p>
 
         <h3><code>deploy/config/mcm-agent/default.json</code></h3>
@@ -871,7 +909,8 @@ docker exec mcm-agent-$DFSP_ID printenv AUTH_CLIENT_ID
 <pre><code>curl -skI https://banque-test.ext.openmfi.org/ping
 </code></pre>
         <p>Résultat attendu : <code>HTTP/2 405</code>. Un <code>502</code> veut dire que le port de gauche dans <code>proxy_pass</code> n’est pas le port inbound, ou que le conteneur SDK n’est pas démarré. Ne pas envoyer <code>*.ext.openmfi.org</code> vers OpenCBS.</p>
-<pre><code>echo | openssl s_client -servername banque-test.ext.openmfi.org -connect 41.214.65.90:443 2&gt;/dev/null \
+<pre><code># IP_WAF : XX.XX.XX.XX
+echo | openssl s_client -servername banque-test.ext.openmfi.org -connect XX.XX.XX.XX:443 2&gt;/dev/null \
   | openssl x509 -noout -ext subjectAltName
 </code></pre>
         <p>Le certificat doit couvrir <code>openmfi.org</code> (souvent un wildcard). Un certificat <code>bftlabs.org</code> ou un autre nom veut dire que le <code>server_name</code> est tombé dans le mauvais bloc nginx.</p>
@@ -2345,6 +2384,7 @@ docker compose up -d
       </div>
     </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>
