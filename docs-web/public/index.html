@@ -150,50 +150,39 @@
           <span class="badge">ml-cc / ml-test</span>
         </div>
         <h2>Hub : déploiement actuel</h2>
-        <p class="lead">Topologie physique et logique du lab tel qu’il tourne aujourd’hui : un WAF en bordure, une VM <code>moja</code> qui porte Proxmox, Terraform, Talos et Kea DHCP4, deux clusters Kubernetes (<code>ml-cc</code>, <code>ml-test</code>) dont les IP sont distribuées par DHCP, et une VM Docker dédiée aux toolkits DFSP.</p>
+        <p class="lead">Le <strong>WAF est le serveur</strong>. Dedans tourne la VM <code>moja</code>. Sur cette VM : Proxmox, Kea DHCP4 et Talos. Kea distribue les IP des VM <code>ml-cc</code>, des VM <code>ml-test</code> et de la VM toolkit (SDK Docker).</p>
         <p>PDF de cette rubrique (y compris les deux schémas) : <a href="architecture-deploiement-lab.pdf">architecture-deploiement-lab.pdf</a>.</p>
 
         <h3>Couches</h3>
         <table>
           <tr><th>Couche</th><th>Nom</th><th>Rôle</th></tr>
-          <tr><td>Bordure</td><td>WAF (<code>WAF-AGG</code>)</td><td>TLS public <code>:443</code>, nginx, DNS <code>*.ext.openmfi.org</code>. Point d’entrée unique du Hub et des FQDN DFSP.</td></tr>
-          <tr><td>Hyperviseur</td><td>VM <code>moja</code></td><td>Proxmox VE. Héberge Terraform, Talos, le DHCP Kea, les VM de clusters et la VM SDK.</td></tr>
-          <tr><td>IaC / OS cluster</td><td>Terraform + Talos + Flux</td><td>Crée et pilote les clusters Kubernetes <code>ml-cc</code> et <code>ml-test</code>.</td></tr>
-          <tr><td>Adressage</td><td>Kea DHCP4 (CT 101)</td><td>Distribue dynamiquement les IP des VM de clusters (réservations MAC pour les nœuds stables).</td></tr>
+          <tr><td>Serveur</td><td>WAF (<code>WAF-AGG</code>)</td><td>Machine hôte. TLS public <code>:443</code>, nginx, DNS <code>*.ext.openmfi.org</code>. Contient la VM <code>moja</code>.</td></tr>
+          <tr><td>VM interne</td><td><code>moja</code></td><td>VM installée sur le WAF. Proxmox, Kea DHCP4 et Talos y tournent.</td></tr>
+          <tr><td>Hyperviseur / OS</td><td>Proxmox + Talos</td><td>Proxmox pilote les VM. Talos est l’OS des nœuds Kubernetes.</td></tr>
+          <tr><td>Adressage</td><td>Kea DHCP4</td><td>Distribue les IP des VM <code>ml-cc</code>, <code>ml-test</code> et toolkit (réservations MAC).</td></tr>
           <tr><td>Control Center</td><td>cluster <code>ml-cc</code></td><td>Harbor, MinIO, Vault hub, observabilité. Kubeconfig : <code>/opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig</code>.</td></tr>
           <tr><td>Switch</td><td>cluster <code>ml-test</code></td><td>Mojaloop (ledger, ALS, quoting, transfers), MCM, Hydra, PXC, Mongo reporting. Kubeconfig : <code>/opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig</code>.</td></tr>
           <tr><td>Participants</td><td>VM SDK <code>cmcalavi-sdk-node</code></td><td>Docker : un toolkit par DFSP onboardé (<code>sdk-scheme-adapter</code>, <code>mcm-agent</code>, Vault). IP <code>172.25.2.117</code>.</td></tr>
         </table>
 
         <h3>Schéma</h3>
-        <p>Le Hub n'appelle jamais l'IP du nœud SDK : les callbacks passent par le WAF.</p>
+        <p>Le Hub n'appelle jamais l'IP du nœud SDK : les callbacks passent par nginx sur le WAF, puis vers la VM toolkit.</p>
         <figure class="diagram">
-          <img src="assets/schema-topologie.png" alt="Topologie lab : Internet, WAF-AGG, VM moja (Proxmox), Kea DHCP4, clusters ml-cc et ml-test, VM SDK 172.25.2.117" />
-          <figcaption>Topologie : WAF, VM moja, DHCP, clusters Hub et nœud SDK.</figcaption>
+          <img src="assets/schema-topologie.svg" alt="Le serveur WAF contient la VM moja. Dans moja : Proxmox, Kea DHCP4 et Talos. Kea distribue les IP des VM ml-cc, ml-test et toolkit." />
+          <figcaption>Topologie : le WAF est le serveur ; la VM moja est à l'intérieur ; Kea donne les IP à ml-cc, ml-test et toolkit.</figcaption>
         </figure>
         <figure class="diagram">
           <img src="assets/schema-flux.png" alt="Flux outbound DFSP vers Hub et inbound Hub vers DFSP via le WAF" />
           <figcaption>Flux : outbound (CBS vers extapi) et inbound (Hub vers FQDN puis SDK).</figcaption>
         </figure>
-<pre><code>Internet  (zone openmfi.org)
-    |
-    |  HTTPS :443, noms *.ext.openmfi.org
-    v
-WAF-AGG  (nginx, certificats, reverse-proxy)
-    |
-    |  LAN 172.16.2.0/24  et  172.25.2.0/24  (vmbr0)
-    v
-VM moja  (Proxmox VE)
-    |-- Terraform / Talos / Flux
-    |-- CT Kea DHCP4 (id 101)     IP dynamiques + réservations MAC
-    |-- VM cluster ml-cc          Control Center
-    |-- VM cluster ml-test        Switch Mojaloop (MCM, ledger, ALS)
-    `-- VM SDK 106  cmcalavi-sdk-node  172.25.2.117
-            Docker Compose par DFSP :
-              sdk-vault-*  +  vault-init
-              mcm-agent-*
-              sdk-scheme-adapter-*
-              redis  (+ simulateur si profil simulator)
+<pre><code>WAF-AGG  (serveur : nginx :443)
+  └── VM moja
+        ├── Proxmox
+        ├── Talos
+        └── Kea DHCP4  ──IP──►  VM ml-cc          (Control Center)
+                           ├──►  VMs ml-test       (switch Mojaloop)
+                           └──►  VM toolkit        (SDK Docker, 172.25.2.117)
+                                    sdk-vault + mcm-agent + sdk-scheme-adapter
 </code></pre>
 
         <h3>Réseau</h3>
@@ -223,7 +212,7 @@ VM moja  (Proxmox VE)
         <table>
           <tr><th>Machine</th><th>Accès typique</th><th>Travaux</th></tr>
           <tr><td>WAF</td><td><code>ssh ops@WAF-AGG</code></td><td>vhosts nginx, ping vers le SDK, certificats</td></tr>
-          <tr><td>Hyperviseur</td><td>UI / SSH Proxmox sur <code>moja</code></td><td>VM, pont <code>vmbr0</code>, CT Kea</td></tr>
+          <tr><td>VM moja</td><td>UI / SSH Proxmox (dans le WAF)</td><td>VM, pont <code>vmbr0</code>, Kea, Talos</td></tr>
           <tr><td>DHCP</td><td>CT 101, <code>/etc/kea/kea-dhcp4.conf</code></td><td>réservations MAC des nœuds Talos et du SDK</td></tr>
           <tr><td>Switch</td><td><code>ops@mojaloop</code>, kubeconfig <code>ml-test</code></td><td>purge ledger, alias oracle, MCM</td></tr>
           <tr><td>Nœud SDK</td><td><code>ssh sdk@172.25.2.117</code></td><td><code>just ports</code>, <code>./manage.sh</code>, unseal Vault, tests outbound</td></tr>

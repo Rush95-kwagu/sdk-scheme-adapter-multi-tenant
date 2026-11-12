@@ -151,18 +151,18 @@
     <p class="kicker">Documentation d'exploitation</p>
     <h1>Architecture du déploiement actuel</h1>
     <p class="meta">Lab Mojaloop · zone openmfi.org · 12 novembre 2026<br />
-    WAF-AGG · VM moja (Proxmox) · clusters ml-cc / ml-test · nœud SDK Docker</p>
+    WAF (serveur) · VM moja · Kea DHCP4 · ml-cc / ml-test / toolkit</p>
   </header>
 
-  <p class="lead">Ce document décrit la topologie physique et logique du lab tel qu'il tourne aujourd'hui : un WAF en bordure, une VM <code>moja</code> qui porte Proxmox, Terraform, Talos et Kea DHCP4, deux clusters Kubernetes dont les IP sont distribuées par DHCP, et une VM Docker dédiée aux toolkits DFSP onboardés.</p>
+  <p class="lead">Le <strong>WAF est le serveur</strong>. Dedans tourne la VM <code>moja</code>. Sur cette VM : Proxmox, Kea DHCP4 et Talos. Kea distribue les IP des VM <code>ml-cc</code>, des VM <code>ml-test</code> et de la VM toolkit (SDK Docker).</p>
 
   <h2>1. Couches</h2>
   <table>
     <tr><th>Couche</th><th>Nom</th><th>Rôle</th></tr>
-    <tr><td>Bordure</td><td>WAF (WAF-AGG)</td><td>TLS public :443, nginx, DNS *.ext.openmfi.org. Point d'entrée unique du Hub et des FQDN DFSP.</td></tr>
-    <tr><td>Hyperviseur</td><td>VM moja</td><td>Proxmox VE. Héberge Terraform, Talos, le DHCP Kea, les VM de clusters et la VM SDK.</td></tr>
-    <tr><td>IaC / OS cluster</td><td>Terraform + Talos + Flux</td><td>Crée et pilote les clusters Kubernetes ml-cc et ml-test.</td></tr>
-    <tr><td>Adressage</td><td>Kea DHCP4 (CT 101)</td><td>Distribue dynamiquement les IP des VM de clusters (réservations MAC pour les nœuds stables).</td></tr>
+    <tr><td>Serveur</td><td>WAF (WAF-AGG)</td><td>Machine hôte. TLS public :443, nginx, DNS *.ext.openmfi.org. Contient la VM moja.</td></tr>
+    <tr><td>VM interne</td><td>moja</td><td>VM installée sur le WAF. Proxmox, Kea DHCP4 et Talos y tournent.</td></tr>
+    <tr><td>Hyperviseur / OS</td><td>Proxmox + Talos</td><td>Proxmox pilote les VM. Talos est l'OS des nœuds Kubernetes.</td></tr>
+    <tr><td>Adressage</td><td>Kea DHCP4</td><td>Distribue les IP des VM ml-cc, ml-test et toolkit (réservations MAC).</td></tr>
     <tr><td>Control Center</td><td>cluster ml-cc</td><td>Harbor, MinIO, Vault hub, observabilité. Kubeconfig : /opt/mojaloop/artifacts/ml-cc/kubernetes/kubeconfig</td></tr>
     <tr><td>Switch</td><td>cluster ml-test</td><td>Mojaloop (ledger, ALS, quoting, transfers), MCM, Hydra, PXC, Mongo reporting. Kubeconfig : /opt/mojaloop/artifacts/ml-test/kubernetes/kubeconfig</td></tr>
     <tr><td>Participants</td><td>VM SDK cmcalavi-sdk-node</td><td>Docker : un toolkit par DFSP (sdk-scheme-adapter, mcm-agent, Vault). IP 172.25.2.117.</td></tr>
@@ -170,32 +170,21 @@
 
   <h2 class="schema-start">2. Schéma</h2>
   <figure class="schema">
-    <img src="assets/schema-topologie.png" alt="Topologie lab : WAF, VM moja, clusters et SDK" />
-    <figcaption>Figure 1. Topologie : WAF, VM moja, DHCP, clusters Hub et nœud SDK.</figcaption>
+    <img src="assets/schema-topologie.png" alt="Le serveur WAF contient la VM moja. Dans moja : Proxmox, Kea DHCP4 et Talos. Kea distribue les IP des VM ml-cc, ml-test et toolkit." />
+    <figcaption>Figure 1. Le WAF est le serveur ; la VM moja est à l'intérieur ; Kea donne les IP à ml-cc, ml-test et toolkit.</figcaption>
   </figure>
   <figure class="schema">
     <img src="assets/schema-flux.png" alt="Flux outbound et inbound" />
     <figcaption>Figure 2. Flux : outbound (CBS vers extapi) et inbound (Hub vers FQDN puis SDK).</figcaption>
   </figure>
-<pre>Internet  (zone openmfi.org)
-    |
-    |  HTTPS :443, noms *.ext.openmfi.org
-    v
-WAF-AGG  (nginx, certificats, reverse-proxy)
-    |
-    |  LAN 172.16.2.0/24  et  172.25.2.0/24  (vmbr0)
-    v
-VM moja  (Proxmox VE)
-    |-- Terraform / Talos / Flux
-    |-- CT Kea DHCP4 (id 101)     IP dynamiques + réservations MAC
-    |-- VM cluster ml-cc          Control Center
-    |-- VM cluster ml-test        Switch Mojaloop (MCM, ledger, ALS)
-    `-- VM SDK 106  cmcalavi-sdk-node  172.25.2.117
-            Docker Compose par DFSP :
-              sdk-vault-*  +  vault-init
-              mcm-agent-*
-              sdk-scheme-adapter-*
-              redis  (+ simulateur si profil simulator)</pre>
+<pre>WAF-AGG  (serveur : nginx :443)
+  └── VM moja
+        ├── Proxmox
+        ├── Talos
+        └── Kea DHCP4  ──IP──►  VM ml-cc          (Control Center)
+                           ├──►  VMs ml-test       (switch Mojaloop)
+                           └──►  VM toolkit        (SDK Docker, 172.25.2.117)
+                                    sdk-vault + mcm-agent + sdk-scheme-adapter</pre>
 
   <h2>3. Réseau</h2>
   <table>

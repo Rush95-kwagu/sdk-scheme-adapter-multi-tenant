@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 640" role="img" aria-labelledby="t d">
+  <title id="t">Topologie lab : serveur WAF, VM moja, DHCP vers les clusters</title>
+  <desc id="d">Le WAF est le serveur. Il contient la VM moja. Dans moja : Proxmox, Kea DHCP4 et Talos. Kea distribue les IP des VM ml-cc, ml-test et toolkit.</desc>
+  <rect width="920" height="640" fill="#f7f5f1"/>
+  <rect x="24" y="24" width="872" height="592" rx="14" fill="#e7f1ec" stroke="#1a4d3c" stroke-width="2.5"/>
+  <text x="44" y="54" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#143d30">WAF (serveur)</text>
+  <text x="44" y="76" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#2f6b54">nginx TLS :443 | point d'entrée public | héberge la VM moja</text>
+
+  <rect x="48" y="96" width="824" height="496" rx="12" fill="#fbfaf8" stroke="#2f6b54" stroke-width="2"/>
+  <text x="68" y="126" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#143d30">VM moja</text>
+  <text x="68" y="146" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#5c5854">logiciels installés sur cette VM</text>
+
+  <rect x="68" y="168" width="240" height="88" rx="8" fill="#fff" stroke="#1a4d3c" stroke-width="1.5"/>
+  <text x="188" y="206" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#143d30">Proxmox</text>
+  <text x="188" y="228" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6b6762">hyperviseur des VM</text>
+
+  <rect x="340" y="168" width="240" height="88" rx="8" fill="#fff" stroke="#1a4d3c" stroke-width="2"/>
+  <text x="460" y="206" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#143d30">Kea DHCP4</text>
+  <text x="460" y="228" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6b6762">distribution des IP</text>
+
+  <rect x="612" y="168" width="240" height="88" rx="8" fill="#fff" stroke="#1a4d3c" stroke-width="1.5"/>
+  <text x="732" y="206" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#143d30">Talos</text>
+  <text x="732" y="228" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6b6762">OS des nœuds Kubernetes</text>
+
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#2f6b54"/>
+    </marker>
+  </defs>
+  <path d="M460 256 L460 288" fill="none" stroke="#2f6b54" stroke-width="2"/>
+  <path d="M188 288 H732" fill="none" stroke="#2f6b54" stroke-width="2"/>
+  <path d="M188 288 L188 388" fill="none" stroke="#2f6b54" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M460 288 L460 388" fill="none" stroke="#2f6b54" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M732 288 L732 388" fill="none" stroke="#2f6b54" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="476" y="278" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#2f6b54">IP DHCP</text>
+
+  <text x="460" y="572" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">VM dont les IP sont distribuées par Kea DHCP4</text>
+
+  <rect x="68" y="396" width="240" height="160" rx="8" fill="#e9edf7" stroke="#3d4e8c" stroke-width="1.6"/>
+  <text x="188" y="428" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1c1c1c">VM ml-cc</text>
+  <text x="188" y="452" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#3d4e8c">Control Center</text>
+  <text x="188" y="478" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">Harbor, MinIO,</text>
+  <text x="188" y="496" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">Vault hub, observabilité</text>
+
+  <rect x="340" y="396" width="240" height="160" rx="8" fill="#f6ecd9" stroke="#9a5b12" stroke-width="1.6"/>
+  <text x="460" y="428" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1c1c1c">VMs ml-test</text>
+  <text x="460" y="452" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#9a5b12">Switch Mojaloop</text>
+  <text x="460" y="478" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">MCM, Hydra, PXC,</text>
+  <text x="460" y="496" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">ALS, quoting, transfers</text>
+
+  <rect x="612" y="396" width="240" height="160" rx="8" fill="#eee9f8" stroke="#5c4a9a" stroke-width="1.6"/>
+  <text x="732" y="428" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1c1c1c">VM toolkit</text>
+  <text x="732" y="452" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#5c4a9a">SDK DFSP | Docker</text>
+  <text x="732" y="478" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">sdk-scheme-adapter,</text>
+  <text x="732" y="496" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">mcm-agent, Vault</text>
+  <text x="732" y="520" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5c5854">172.25.2.117</text>
+</svg>
